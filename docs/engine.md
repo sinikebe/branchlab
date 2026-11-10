@@ -42,9 +42,12 @@ Les nouveaux champs sont facultatifs : les exports de schéma 1 restent importab
 
 - RTX 4090 : [NVIDIA](https://www.nvidia.com/en-us/geforce/graphics-cards/40-series/rtx-4090/) — design de référence, 3 DisplayPort 1.4a, 1 HDMI 2.1a ; DSC documenté. Les variantes des assembleurs doivent avoir leurs propres fiches.
 - RTX 5080 : [NVIDIA](https://www.nvidia.com/en-gb/geforce/graphics-cards/50-series/rtx-5080/) — design de référence, 3 DisplayPort 2.1b UHBR20, 1 HDMI 2.1b ; DSC documenté.
+- Gamme RTX 50 de bureau : les huit profils du [catalogue NVIDIA](https://www.nvidia.com/en-us/geforce/graphics-cards/50-series/) reprennent chacun leurs caractéristiques de référence. Les RTX 5060 Ti 8 et 16 Go ont des identifiants distincts. Voir [les données et sources par modèle](hardware/nvidia-geforce-50.md).
 - Débits DisplayPort : [VESA](https://vesa.org/featured-articles/vesa-publishes-displayport-2-0-video-standard-enabling-support-for-beyond-8k-resolutions-higher-refresh-rates-for-4k-hdr-and-virtual-reality-applications/) — charge utile HBR3 25,92 Gbit/s et UHBR20 77,37 Gbit/s. Le profil de la RTX4090 utilise la capacité normalisée HBR3 du DP1.4a avec l’hypothèse de quatre lignes.
 
 Caractéristiques NVIDIA et références vérifiées le 10 novembre 2026. Les profils de câble sont des déclarations utilisateur. L’écran de démonstration est fictif et le XENEON FLEX possède une fiche constructeur distincte. Chaque port possède une provenance par défaut et peut préciser des références différentes par caractéristique via `evidence` ; chaque profil DSC possède sa propre source.
+
+Le champ facultatif `Device.gpu` conserve les caractéristiques descriptives et leur provenance dans les fichiers de schéma 1. Le moteur vidéo utilise les ports et le profil DSC accepté, pas la mémoire, les cœurs CUDA, les fréquences GPU ou la puissance électrique. Un maximum constructeur de quatre écrans ne lève pas la limite actuelle d’une seule chaîne simulée. Le connecteur PCIe et les options d’alimentation sont documentés dans la fiche ; leur raccordement et leur validation électrique ne sont pas modélisés par ces nouvelles données.
 
 ## Extension
 

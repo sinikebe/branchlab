@@ -251,6 +251,7 @@ p {
 }
 .library-item > span:nth-child(2) {
   flex: 1;
+  min-width: 0;
 }
 .library-item strong {
   font-size: 11px;
@@ -2039,6 +2040,24 @@ h1 > span {
 .reference-notes ul {
   padding-left: 15px;
   line-height: 1.8;
+}
+.gpu-reference .gpu-details {
+  margin: 14px 0;
+}
+.gpu-details summary {
+  color: #586e91;
+  font-weight: 600;
+}
+.gpu-details h4 {
+  margin: 16px 0 6px;
+  font-size: 10px;
+  color: #586e91;
+}
+.gpu-details .reference-specs {
+  margin-top: 15px;
+}
+.gpu-reference dd {
+  overflow-wrap: anywhere;
 }
 .physical-ports li {
   margin: 7px 0;

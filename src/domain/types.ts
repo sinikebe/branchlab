@@ -1,12 +1,43 @@
 /** Browser-independent hardware graph. Connector/protocol ids remain open strings. */
 export type Status = 'compatible' | 'incompatible' | 'indeterminate';
-export type GpuId = 'rtx4090' | 'rtx5080';
+export type GpuId =
+  | 'rtx4090'
+  | 'rtx5090'
+  | 'rtx5080'
+  | 'rtx5070ti'
+  | 'rtx5070'
+  | 'rtx5060ti-16gb'
+  | 'rtx5060ti-8gb'
+  | 'rtx5060'
+  | 'rtx5050';
 export type DisplayId = 'demo' | 'xeneon-flex';
 export interface Source {
   kind: 'manufacturer' | 'standard' | 'user' | 'demo';
   label: string;
   url?: string;
   checkedAt?: string;
+}
+/** Informational reference specifications, not a power/FPS/multi-display simulation. */
+export interface GpuSpecifications {
+  architecture: string;
+  cudaCores: number;
+  memoryGB: number;
+  memoryType: string;
+  memoryBusBits: number;
+  memoryBandwidthGBps: number | null;
+  baseClockGHz: number | null;
+  boostClockGHz: number | null;
+  pcieGeneration: string | null;
+  pcieLanes: number | null;
+  totalGraphicsPowerW: number | null;
+  recommendedSystemPowerW: number | null;
+  /** Cable/adapter options; these do not imply multiple physical sockets on the GPU. */
+  powerConnectionNotes: string[];
+  maxDisplays: number | null;
+  displaySupportNotes: string[];
+  notes: string[];
+  source: Source;
+  evidence?: Record<string, Source>;
 }
 /** A configuration explicitly accepted for this RGB timing by the declaring port.
  * This contract includes its encoder/decoder throughput and buffer constraints;
@@ -57,6 +88,7 @@ export interface Device {
   routes: InternalRoute[];
   source: Source;
   catalogId?: string;
+  gpu?: GpuSpecifications;
   display?: {
     diagonalInches: number;
     panelTechnology: string;
