@@ -42,6 +42,12 @@ fi
 git -C "$checkout" checkout --detach --force "$revision"
 git -C "$checkout" clean -ffd -e node_modules
 cd "$checkout"
+# Keep the currently served release if a user-facing change has no new version/notes.
+if [[ -n "$current" ]]; then
+  previous_revision="${current##*/}"
+  [[ "$previous_revision" =~ ^[0-9a-f]{40,64}$ ]] || fail "révision publiée invalide"
+  node scripts/check-changelog.js --base "$previous_revision"
+fi
 npm ci --no-audit --no-fund
 npm run check
 npm run test:e2e

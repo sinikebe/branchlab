@@ -55,6 +55,8 @@ import { loadSetup, saveSetup, parseSetup, exportSetup } from './storage';
 import { validateEditorSetup } from './editor-validation';
 import { DisplayReference, PublishedModes } from './components/DisplayReference';
 import { DscSettings } from './components/DscSettings';
+import { Changelog } from './components/Changelog';
+import { version as appVersion } from '../package.json';
 
 type EquipmentData = {
   device: Device;
@@ -193,7 +195,7 @@ export function App() {
   const [saveState, setSaveState] = useState('Chargement…');
   const [selection, setSelection] = useState<Selection>('cable');
   const [panel, setPanel] = useState<'diagnosis' | 'equipment'>('diagnosis');
-  const [modal, setModal] = useState<'library' | 'sources' | 'guide' | null>(null);
+  const [modal, setModal] = useState<'library' | 'sources' | 'guide' | 'changelog' | null>(null);
   const [notice, setNotice] = useState('');
   const [pendingOutput, setPendingOutput] = useState('dp-1');
   const [pendingInput, setPendingInput] = useState('dp-in');
@@ -201,6 +203,7 @@ export function App() {
   const [nodes, setNodes, onNodesChange] = useNodesState<EquipmentNode>([]);
   const upload = useRef<HTMLInputElement>(null);
   const canvas = useRef<HTMLDivElement>(null);
+  const modalClose = useRef<HTMLButtonElement>(null);
   const [flow, setFlow] = useState<ReactFlowInstance<EquipmentNode> | null>(null);
   const source = setup.devices.find((device) => device.id === setup.goal.sourceDeviceId)!;
   const display = setup.devices.find((device) => device.id === setup.goal.displayDeviceId)!;
@@ -279,6 +282,7 @@ export function App() {
   useEffect(() => {
     if (!modal) return;
     const previouslyFocused = document.activeElement as HTMLElement | null;
+    modalClose.current?.focus();
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setModal(null);
       if (event.key !== 'Tab') return;
@@ -1592,10 +1596,23 @@ export function App() {
             <span>
               BranchLab <span className="footer-dot">·</span> Chaque connexion a une explication.
             </span>
-            <button onClick={() => setModal('sources')}>
-              Voir les sources
-              <ArrowUpRight size={13} />
-            </button>
+            <div className="footer-links">
+              <div className="app-version">
+                <span aria-label={`Version de l’application : ${appVersion}`}>v{appVersion}</span>
+                <button
+                  aria-label={`Nouveautés de la version ${appVersion}`}
+                  aria-haspopup="dialog"
+                  onClick={() => setModal('changelog')}
+                >
+                  Nouveautés
+                  <ChevronRight size={13} />
+                </button>
+              </div>
+              <button onClick={() => setModal('sources')}>
+                Voir les sources
+                <ArrowUpRight size={13} />
+              </button>
+            </div>
           </footer>
         </main>
       </div>
@@ -1622,7 +1639,7 @@ export function App() {
             onClick={(event) => event.stopPropagation()}
           >
             <button
-              autoFocus
+              ref={modalClose}
               className="icon-button modal-close"
               aria-label="Fermer"
               onClick={() => setModal(null)}
@@ -1635,7 +1652,9 @@ export function App() {
                 ? 'Des données, pas des suppositions.'
                 : modal === 'guide'
                   ? 'Bienvenue dans votre atelier.'
-                  : 'Les premières briques.'}
+                  : modal === 'changelog'
+                    ? 'Les nouveautés de BranchLab'
+                    : 'Les premières briques.'}
             </h2>
             {modal === 'sources' ? (
               <>
@@ -1672,6 +1691,8 @@ export function App() {
                   DisplayPort est dérivé des débits normalisés, pas une mesure de votre matériel.
                 </p>
               </>
+            ) : modal === 'changelog' ? (
+              <Changelog currentVersion={appVersion} />
             ) : modal === 'guide' ? (
               <>
                 <p>

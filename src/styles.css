@@ -1213,6 +1213,8 @@ h1 > span {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
   padding: 28px 0 22px;
   font-size: 9px;
   color: #a8b0c0;
@@ -1226,6 +1228,74 @@ h1 > span {
   gap: 6px;
   font-size: 9px;
   color: #96a2b8;
+}
+.footer-links {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 22px;
+}
+.app-version {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.app-version > span {
+  color: #697a96;
+  font-variant-numeric: tabular-nums;
+}
+.page-footer .app-version button {
+  color: var(--blue);
+  font-size: 11px;
+}
+.changelog-list {
+  list-style: none;
+  padding: 0;
+  margin: 24px 0 0;
+}
+.changelog-release {
+  padding: 20px 0;
+  border-top: 1px solid var(--border);
+}
+.changelog-release:last-child {
+  padding-bottom: 0;
+}
+.changelog-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.changelog-heading h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.current-release {
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: var(--blue);
+  background: #edf1ff;
+  font-size: 10px;
+  font-weight: 500;
+}
+.changelog-release time {
+  display: block;
+  margin-top: 7px;
+  color: #697a96;
+  font-size: 11px;
+}
+.changelog-release ul {
+  margin: 16px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #50617b;
+}
+.changelog-release ul li + li {
+  margin-top: 6px;
 }
 .element-switch {
   display: flex;

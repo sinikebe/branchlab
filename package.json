@@ -1,6 +1,6 @@
 {
   "name": "branchlab",
-  "version": "0.1.0-dev",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -8,7 +8,9 @@
   },
   "scripts": {
     "dev": "vite --host 192.168.1.60 --port 5174 --strictPort",
-    "build": "tsc -b && vite build",
+    "build": "npm run changelog:check && tsc -b && vite build",
+    "changelog:check": "node scripts/check-changelog.js",
+    "changelog:test": "node --test scripts/check-changelog.test.js",
     "hosting:check": "node --test scripts/ensure-workers-subdomain.test.js && wrangler deploy --dry-run",
     "hosting:deploy": "node scripts/ensure-workers-subdomain.js && wrangler deploy",
     "preview": "vite preview --host 192.168.1.60 --port 5174 --strictPort",
@@ -17,7 +19,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "check": "npm run typecheck && npm run lint && npm test"
+    "check": "npm run changelog:check && npm run changelog:test && npm run typecheck && npm run lint && npm test"
   },
   "dependencies": {
     "@xyflow/react": "^12.12.1",
