@@ -3,7 +3,7 @@
 set -Eeuo pipefail
 export GIT_TERMINAL_PROMPT=0
 
-repository="${BRANCHLAB_REPOSITORY:-https://github.com/sinikebe/branchlab.git}"
+repository="${BRANCHLAB_REPOSITORY:-git@github-branchlab-deploy:sinikebe/branchlab.git}"
 checkout="${BRANCHLAB_CHECKOUT:-/root/branchlab-dev}"
 state="${BRANCHLAB_STATE:-/root/.local/share/branchlab}"
 controller="$(realpath -m "${BRANCHLAB_SOURCE:-/root/branchlab}")"
