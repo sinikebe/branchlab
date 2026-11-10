@@ -161,7 +161,7 @@ function inspectPath(setup: Setup, steps: Step[], mode: VideoMode): PathResult {
         'source-unverified',
         'indeterminate',
         'Origine du signal non documentée',
-        'Les capacités de la carte NVIDIA ne sont pas attribuées à cette sortie. Le processeur graphique relié, son activation et le routage doivent être renseignés.',
+        'Les capacités d’une carte graphique dédiée ne sont pas attribuées à cette sortie. Le circuit graphique du processeur, son activation et le routage vers les prises de la carte mère doivent être renseignés.',
         [sourceDevice.id],
       ),
     );

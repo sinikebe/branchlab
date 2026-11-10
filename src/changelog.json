@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.4.0",
+    "date": "2026-11-10",
+    "changes": [
+      "Ajoutez une ASRock B850 Pro-A WiFi ou une MSI MPG X870E CARBON WIFI et consultez leurs connecteurs et caractéristiques sourcés.",
+      "Choisissez une sortie HDMI ou USB-C vidéo de la carte mère en gardant visibles les conditions liées au processeur.",
+      "L’indication d’enregistrement confirme la sauvegarde de votre dernière modification du setup."
+    ]
+  },
+  {
     "version": "0.3.0",
     "date": "2026-11-10",
     "changes": [
