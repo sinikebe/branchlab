@@ -1,0 +1,54 @@
+name: Validate BranchLab
+
+on:
+  push:
+    branches: [main, dev, 'feature/**']
+  pull_request:
+    branches: [dev, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Let an ongoing production deployment finish before publishing the next one.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  validate:
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 15
+    env:
+      # Separate from the deployment updater's browser tests on port 5175.
+      BRANCHLAB_E2E_PORT: '5177'
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      # System dependencies are installed on the host, outside the unprivileged job.
+      - run: npx playwright install chromium
+      - run: npm run test:e2e
+      - run: npm run build
+      - name: Record the published revision
+        run: |
+          node -e 'require("node:fs").writeFileSync("dist/version.json", JSON.stringify({commit: process.env.GITHUB_SHA, branch: process.env.GITHUB_REF_NAME}) + "\n")'
+      - name: Validate Cloudflare static hosting configuration
+        run: npm run hosting:check
+      - name: Publish main to Cloudflare
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          if [[ -z "$CLOUDFLARE_API_TOKEN" || -z "$CLOUDFLARE_ACCOUNT_ID" ]]; then
+            echo '::error::Configure CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in the repository Actions secrets before publishing main.'
+            exit 1
+          fi
+          npm run hosting:deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

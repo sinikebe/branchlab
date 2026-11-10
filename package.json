@@ -1,0 +1,50 @@
+{
+  "name": "branchlab",
+  "version": "0.1.0-dev",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "dev": "vite --host 192.168.1.60 --port 5174 --strictPort",
+    "build": "tsc -b && vite build",
+    "hosting:check": "wrangler deploy --dry-run",
+    "hosting:deploy": "wrangler deploy",
+    "preview": "vite preview --host 192.168.1.60 --port 5174 --strictPort",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "check": "npm run typecheck && npm run lint && npm test"
+  },
+  "dependencies": {
+    "@xyflow/react": "^12.12.1",
+    "dexie": "^4.4.7",
+    "lucide-react": "^1.71.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.65.0",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "eslint": "^10.14.0",
+    "fake-indexeddb": "^6.2.8",
+    "globals": "^17.14.0",
+    "prettier": "^3.9.10",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.72.2",
+    "vite": "^8.3.7",
+    "vitest": "^5.1.0",
+    "wrangler": "4.160.0"
+  },
+  "overrides": {
+    "minimatch": "^11.0.5"
+  }
+}

@@ -1,0 +1,20 @@
+[Unit]
+Description=BranchLab development instance (LAN static build)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Environment=BRANCHLAB_BIND=192.168.1.60
+Environment=BRANCHLAB_PORT=5173
+ExecStart=/usr/bin/python3 /usr/local/lib/branchlab/serve-dev.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+
+[Install]
+WantedBy=multi-user.target
