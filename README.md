@@ -53,6 +53,8 @@ La CI installe la version Node indiquée dans `.node-version`, les dépendances 
 
 Les tests de la CI utilisent uniquement `127.0.0.1:5177`, via `BRANCHLAB_E2E_PORT`. Les tests locaux et ceux de la mise à jour automatique gardent le port `5175` par défaut. Chaque exécution démarre son propre serveur et échoue si son port est occupé, afin de ne jamais valider un autre checkout. La CI limite les tests navigateur à deux processus et annule les validations périmées d’une même branche. Le serveur LAN sur le port `5173` continue à servir la dernière version validée.
 
+Les captures et traces navigateur sont enregistrées dans `test-results/` du checkout concerné, avec un dossier par test ; aucun fichier partagé dans `/tmp` n’est utilisé.
+
 Vérifier l’état du runner :
 
 ```bash

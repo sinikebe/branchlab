@@ -73,10 +73,10 @@ test('invalid imports keep the project and export produces a portable snapshot',
   expect(snapshot.connections).toHaveLength(1);
 });
 
-test('workspace fits desktop and mobile with working source dialog', async ({ page }) => {
+test('workspace fits desktop and mobile with working source dialog', async ({ page }, testInfo) => {
   await page.goto('/');
   await expect(page.locator('.equipment-node')).toHaveCount(2);
-  await page.screenshot({ path: '/tmp/branchlab-desktop.png', fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath('desktop.png'), fullPage: true });
   await page.getByRole('button', { name: 'Voir les sources' }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
   await page.keyboard.press('Escape');
@@ -84,7 +84,7 @@ test('workspace fits desktop and mobile with working source dialog', async ({ pa
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByRole('heading', { name: 'Votre setup, au clair.' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: '/tmp/branchlab-mobile.png', fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath('mobile.png'), fullPage: true });
 });
 
 test('unknown screen capabilities can be completed without resetting the project', async ({
