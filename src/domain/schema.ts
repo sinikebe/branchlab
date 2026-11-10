@@ -24,6 +24,7 @@ const port = z.object({
   maxPayloadGbps: payload,
   dsc: z.boolean().nullable(),
   supportedModeIds: nullableStrings,
+  modeListComplete: z.boolean().optional(),
   supportedColorDepths: z
     .array(z.union([z.literal(8), z.literal(10), z.literal(12)]))
     .nullable()
@@ -53,6 +54,19 @@ export const SETUP_SCHEMA: z.ZodType<Setup> = z
           ports: z.array(port).max(100),
           routes: z.array(route).max(500),
           source,
+          catalogId: id.optional(),
+          display: z
+            .object({
+              diagonalInches: z.number().positive().max(1000),
+              panelTechnology: name,
+              nativeWidth: z.number().int().positive().max(100000),
+              nativeHeight: z.number().int().positive().max(100000),
+              maxRefreshHz: z.number().positive().max(10000),
+              colorDepthBits: z.number().int().positive().max(64).optional(),
+              notes: z.array(z.string().max(2000)).max(100),
+              source,
+            })
+            .optional(),
         }),
       )
       .min(1)

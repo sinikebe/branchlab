@@ -1,4 +1,4 @@
-import type { Cable, Device, GpuId, Port, Setup, Source, VideoMode } from './types';
+import type { Cable, Device, DisplayId, GpuId, Port, Setup, Source, VideoMode } from './types';
 
 const checkedAt = '2026-11-10';
 export const NVIDIA_4090: Source = {
@@ -27,6 +27,24 @@ export const USER_SOURCE: Source = {
   kind: 'user',
   label: 'Caractéristique déclarée par l’utilisateur',
 };
+export const CORSAIR_XENEON_GUIDE: Source = {
+  kind: 'manufacturer',
+  label: 'CORSAIR — XENEON FLEX 45WQHD240, manuel anglais, tableaux 1 et 2 et réglages système',
+  checkedAt,
+  url: 'https://www.corsair.com/us/en/explorer/gamer/monitors/corsair-xeneon-flex-45wqhd240-oled/',
+};
+export const CORSAIR_XENEON_PRODUCT: Source = {
+  kind: 'manufacturer',
+  label: 'CORSAIR — XENEON FLEX 45WQHD240, fiche produit CM-9030001',
+  checkedAt,
+  url: 'https://www.corsair.com/us/en/p/monitors/cm-9030001-na/corsair-xeneon-flex-45wqhd240-45-inch-oled-3440-x1440-240hz-refresh-rate-bendable-gaming-monitor-cm-9030001-na',
+};
+export const CTA_TIMING_SOURCE: Source = {
+  kind: 'standard',
+  label: 'Linux DRM — table CTA-861, VIC 16 : 1920 × 1080 à 60 Hz, horloge 148,5 MHz',
+  checkedAt,
+  url: 'https://github.com/torvalds/linux/blob/v6.12/drivers/gpu/drm/drm_edid.c',
+};
 export const VIDEO_MODES: VideoMode[] = [
   {
     id: '1080p60',
@@ -35,7 +53,7 @@ export const VIDEO_MODES: VideoMode[] = [
     height: 1080,
     refreshHz: 60,
     pixelClockMHz: 148.5,
-    source: DEMO_SOURCE,
+    source: CTA_TIMING_SOURCE,
   },
   {
     id: '1440p60',
@@ -92,6 +110,37 @@ export const VIDEO_MODES: VideoMode[] = [
     source: DEMO_SOURCE,
   },
 ];
+// Resolution/refresh is documented by CORSAIR; exact pixel clocks are not published.
+VIDEO_MODES.push(
+  ...[50, 60, 100, 240].map((refreshHz): VideoMode => ({
+    id: `uwqhd${refreshHz}`,
+    label: `UWQHD · ${refreshHz} Hz`,
+    width: 3440,
+    height: 1440,
+    refreshHz,
+    pixelClockMHz: null,
+    source: CORSAIR_XENEON_GUIDE,
+  })),
+  ...[120, 240].map((refreshHz): VideoMode => ({
+    id: `1440p${refreshHz}`,
+    label: `QHD · ${refreshHz} Hz`,
+    width: 2560,
+    height: 1440,
+    refreshHz,
+    pixelClockMHz: null,
+    source: CORSAIR_XENEON_GUIDE,
+  })),
+  {
+    id: '1080p240',
+    label: 'Full HD · 240 Hz',
+    width: 1920,
+    height: 1080,
+    refreshHz: 240,
+    pixelClockMHz: null,
+    source: CORSAIR_XENEON_GUIDE,
+  },
+);
+
 export const GPU_CATALOG: { id: GpuId; name: string; description: string; url: string }[] = [
   {
     id: 'rtx4090',
@@ -191,12 +240,15 @@ export function createCable(profileId: string, id = 'cable-1'): Cable {
   };
 }
 
-export function createSetup(gpu: GpuId = 'rtx4090'): Setup {
-  const allModes = VIDEO_MODES.map((mode) => mode.id);
-  const display: Device = {
+function createDemoDisplay(): Device {
+  const allModes = VIDEO_MODES.filter((mode) => mode.source.kind !== 'manufacturer').map(
+    (mode) => mode.id,
+  );
+  return {
     id: 'display-1',
     name: 'Écran de démonstration 4K',
     kind: 'display',
+    catalogId: 'demo',
     source: DEMO_SOURCE,
     routes: [],
     ports: [
@@ -226,6 +278,10 @@ export function createSetup(gpu: GpuId = 'rtx4090'): Setup {
       },
     ],
   };
+}
+
+export function createSetup(gpu: GpuId = 'rtx4090'): Setup {
+  const display = createDemoDisplay();
   return {
     schemaVersion: 1,
     name: 'Mon premier setup',
@@ -242,4 +298,102 @@ export function createSetup(gpu: GpuId = 'rtx4090'): Setup {
     goal: { sourceDeviceId: 'gpu-1', displayDeviceId: 'display-1', modeId: '4k60', colorDepth: 8 },
     conditions: { computerOperational: true, displayPowered: true },
   };
+}
+
+export const DISPLAY_CATALOG: { id: DisplayId; name: string; description: string; url?: string }[] =
+  [
+    {
+      id: 'xeneon-flex',
+      name: 'CORSAIR XENEON FLEX 45WQHD240',
+      description: '45 pouces · OLED · 3440 × 1440 · jusqu’à 240 Hz',
+      url: CORSAIR_XENEON_PRODUCT.url,
+    },
+    {
+      id: 'demo',
+      name: 'Écran de démonstration 4K',
+      description: 'Profil fictif · capacités personnalisables',
+    },
+  ];
+
+/** A sourced device declaration. Missing transport/EDID data deliberately stays unknown. */
+export function createDisplay(id: DisplayId, deviceId = 'display-1'): Device {
+  if (id === 'demo') return { ...createDemoDisplay(), id: deviceId };
+  const guide = CORSAIR_XENEON_GUIDE;
+  const commonModes = [
+    '1080p60',
+    '1080p240',
+    '1440p120',
+    '1440p240',
+    'uwqhd50',
+    'uwqhd60',
+    'uwqhd100',
+    'uwqhd240',
+  ];
+  const basePort = (
+    id: string,
+    label: string,
+    connector: string,
+    protocols: string[],
+    role: Port['role'] = 'sink',
+  ): Port => ({
+    id,
+    label,
+    connector,
+    protocols,
+    role,
+    maxPayloadGbps: null,
+    dsc: null,
+    supportedModeIds: [],
+    modeListComplete: false,
+    supportedColorDepths: null,
+    source: guide,
+  });
+  const videoPort = (id: string, label: string, connector: string, modes: string[]): Port => ({
+    ...basePort(id, label, connector, [connector === 'usb-c' ? 'displayport' : connector]),
+    supportedModeIds: modes,
+  });
+  return {
+    id: deviceId,
+    name: 'CORSAIR XENEON FLEX 45WQHD240',
+    kind: 'display',
+    catalogId: 'xeneon-flex',
+    source: CORSAIR_XENEON_PRODUCT,
+    display: {
+      diagonalInches: 45,
+      panelTechnology: 'OLED',
+      nativeWidth: 3440,
+      nativeHeight: 1440,
+      maxRefreshHz: 240,
+      colorDepthBits: 10,
+      notes: [
+        'Mode normal, PIP/PBP désactivés. La liste de modes est un sous-ensemble du tableau constructeur.',
+        'Le 4K est un signal accepté par HDMI, pas la résolution physique de la dalle.',
+        'USB-C vidéo : quatre lignes jusqu’à 3440 × 1440 à 240 Hz ; deux lignes jusqu’à 60 Hz. Le réglage OSD n’est pas encore simulé.',
+        'USB-C vidéo : Power Delivery 30 W annoncé ; USB-C du hub : données 5 Gbit/s et Power Delivery 15 W maximum, sans vidéo documentée. Ces capacités ne constituent pas un bilan d’alimentation.',
+        'Les débits de liaison, les horloges natives et la négociation DSC ne sont pas publiés dans les sources retenues.',
+        'Les 10 bits RGB décrivent la dalle ; la profondeur acceptée par chaque entrée et pour chaque mode reste à documenter.',
+      ],
+      source: guide,
+    },
+    routes: [],
+    ports: [
+      videoPort('dp-in', 'DisplayPort · 1.4', 'displayport', commonModes),
+      videoPort('hdmi-in', 'HDMI 1 · 2.1', 'hdmi', [...commonModes, '4k60', '4k120']),
+      videoPort('hdmi-2-in', 'HDMI 2 · 2.1', 'hdmi', [...commonModes, '4k60', '4k120']),
+      videoPort('usb-c-video', 'USB-C · DP Alt Mode', 'usb-c', commonModes),
+      basePort('usb-c-upstream', 'USB-C · hub, sans vidéo', 'usb-c', ['usb']),
+      ...[1, 2, 3, 4].map((number) =>
+        basePort(`usb-a-${number}`, `USB-A ${number} · hub 5 Gbit/s`, 'usb-a', ['usb'], 'source'),
+      ),
+      basePort('audio-out', 'Casque · jack 3,5 mm', 'audio-jack-3.5', ['analog-audio'], 'source'),
+      basePort('dc-in', 'Alimentation · DC In', 'dc-input', ['dc-power']),
+    ],
+  };
+}
+
+export function createXeneonSetup(gpu: GpuId = 'rtx4090'): Setup {
+  const setup = createSetup(gpu);
+  setup.devices[1] = createDisplay('xeneon-flex');
+  setup.goal.modeId = 'uwqhd60';
+  return setup;
 }

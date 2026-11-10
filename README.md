@@ -1,6 +1,6 @@
 # BranchLab
 
-BranchLab représente une installation sous forme d’appareils, de ports et de câbles et explique les capacités de la chaîne complète. Cette première version couvre une carte NVIDIA RTX 4090 ou RTX 5080 de référence, un câble et un écran personnalisable. Le modèle de données permet d’ajouter d’autres familles d’appareils sans réécrire l’interface.
+BranchLab représente une installation sous forme d’appareils, de ports et de câbles et explique les capacités de la chaîne complète. Cette première version couvre une carte NVIDIA RTX 4090 ou RTX 5080 de référence, un câble et un écran personnalisable, avec un premier profil réel CORSAIR XENEON FLEX 45WQHD240. Le modèle de données permet d’ajouter d’autres familles d’appareils sans réécrire l’interface.
 
 Application statique, sans compte, sans API d’IA et sans serveur de données utilisateur. Les caractéristiques manquantes restent inconnues : aucun modèle de moniteur commercial n’est inventé.
 
@@ -27,7 +27,7 @@ La commande `check` exécute les contrôles de types, de style et les tests du m
 ## Utiliser la première version
 
 1. Sélectionner la carte NVIDIA de référence dans le catalogue ou le panneau de la source.
-2. Cliquer sur l’écran pour renseigner les modes et la capacité de l’entrée utilisée. Le moniteur fourni est fictif.
+2. Choisir le XENEON FLEX dans la bibliothèque ou dans « Modèle d’écran ». Le profil fictif reste disponible et les brouillons existants sont conservés. Cliquer sur l’écran pour consulter les caractéristiques et renseigner les données manquantes de chaque entrée.
 3. Relier un port de sortie à une entrée, puis inspecter le câble et ses capacités déclarées.
 4. Choisir le mode souhaité et lire séparément le diagnostic du signal et celui de l’objectif vidéo.
 5. Consulter les hypothèses et les sources. Exporter le setup en JSON pour conserver une sauvegarde portable.
@@ -100,15 +100,22 @@ Si l’adresse LAN change, modifier `BRANCHLAB_BIND` dans le service et redémar
 
 Les profils NVIDIA visent les conceptions de référence : les sorties d’une carte partenaire peuvent différer. Vérifier la variante exacte de la carte. Le résultat du moteur concerne les données déclarées et les fonctions couvertes, pas une mesure physique ou une garantie constructeur. La présence d’une image et la capacité du mode vidéo demandé sont deux questions distinctes. Le moteur ne promet pas un nombre d’images par seconde dans les jeux, ni la sécurité électrique de l’installation.
 
-La couverture calculée concerne une source et un écran, en RGB 4:4:4 et selon la profondeur déclarée. Les timings proposés sont des profils de démonstration, dont certains synthétiques ; ils ne remplacent pas les modes EDID ou la documentation d’un moniteur réel. Le budget vidéo non compressé est conservateur et ne constitue pas une négociation complète du transport. DSC n’est pas simulé : un mode qui dépendrait de cette compression reste indéterminé. Un numéro de version HDMI ne permet pas à lui seul de déduire le débit du lien.
+Le profil XENEON FLEX provient du [guide officiel Corsair](https://www.corsair.com/us/en/explorer/gamer/monitors/corsair-xeneon-flex-45wqhd240-oled/) et de sa fiche produit. Il conserve les deux HDMI, le DisplayPort, l’USB-C vidéo, l’USB-C du hub et les autres prises. Les modes annoncés pour chaque entrée sont distincts des modes validés pour toute la chaîne. Les listes partielles ne permettent pas de déclarer impossible un mode absent. La réception d’un signal 4K via HDMI ne transforme pas la dalle native 3440 × 1440 en écran 4K.
+
+Les sources retenues ne publient pas les horloges natives, les débits exacts de liaison, la matrice couleur par entrée/mode ou les paramètres DSC : ces valeurs restent inconnues. Le 3440 × 1440 à 240 Hz est annoncé par Corsair mais reste indéterminé pour la chaîne, même avec la RTX 5080. Une validation 1080p60 est testée pour les deux RTX avec un timing CTA standard et des capacités d’entrée **explicitement déclarées par l’utilisateur** ; ce scénario conditionnel ne complète pas la fiche constructeur par des valeurs inventées.
+
+La couverture calculée concerne une source et un écran, en RGB 4:4:4 et selon la profondeur déclarée. Les timings génériques sont des profils de démonstration, dont certains synthétiques ; le 1080p60 utilise un profil CTA standard sourcé. Les modes natifs Corsair sans horloge publiée restent incomplets. Ces données ne remplacent pas la lecture EDID du moniteur réel. Le budget vidéo non compressé est conservateur et ne constitue pas une négociation complète du transport. DSC n’est pas simulé : un mode qui dépendrait de cette compression reste indéterminé. Un numéro de version HDMI ne permet pas à lui seul de déduire le débit du lien.
 
 Les tests automatisés du moteur vérifient notamment une chaîne valide, les incompatibilités de connecteurs et de protocoles, une capacité insuffisante, les données inconnues, l’origine carte mère, les limites de timings, DSC et un intermédiaire limitant. Des tests de stockage vérifient la sauvegarde et l’import. Le modèle peut conserver des routes internes et de nouvelles familles de connecteurs ; l’éditeur et les règles de cette version ne couvrent pas encore les installations arbitraires ou plusieurs écrans.
 
 Les cas dépendant d’un protocole, d’un appareil ou d’une information non couverte doivent rester indéterminés. L’objectif futur de représenter tous les connecteurs ne signifie pas qu’ils sont tous simulés dans cette première version.
 
-Sources des premières cartes :
+Sources des premiers appareils :
 
 - [NVIDIA GeForce RTX 4090](https://www.nvidia.com/en-us/geforce/graphics-cards/40-series/rtx-4090/)
 - [NVIDIA GeForce RTX 5080](https://www.nvidia.com/en-gb/geforce/graphics-cards/50-series/rtx-5080/)
+
+- [CORSAIR XENEON FLEX — guide et tables des modes](https://www.corsair.com/us/en/explorer/gamer/monitors/corsair-xeneon-flex-45wqhd240-oled/)
+- [Fiche de référence et limites de preuve](docs/hardware/corsair-xeneon-flex.md)
 
 Voir `docs/` pour le cadrage, l’architecture, les règles couvertes et les hypothèses de diagnostic.
