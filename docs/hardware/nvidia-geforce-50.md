@@ -37,6 +37,8 @@ Pour la RTX 5070, le seuil de puissance du câble Gen 5 diffère entre la fiche 
 
 Le PCIe Gen 5 est documenté pour la série 50. Le nombre de voies PCIe n’est pas renseigné dans ce catalogue faute de source de référence retenue. Le débit utile HDMI exact et les profils DSC négociés restent également inconnus. La mention DSC et les plafonds de couleur ne remplacent pas l’acceptation d’un profil commun par la carte et l’écran. Aucune valeur FRL ou aucun réglage DSC n’est créé à partir d’un intitulé HDMI/DisplayPort.
 
+La documentation détaillée des sorties HDMI a été complétée pour les seules RTX 4090 et 5080 : [capacités et sources retenues](video-outputs-4090-5080-am5.md). NVIDIA documente FRL à 48 Gbit/s bruts pour les GeForce RTX 40, ce qui couvre la RTX 4090 conservée au catalogue. Pour la RTX 5080 de référence, les notes HDMI indiquent jusqu’à 4K 480 Hz ou 8K 120 Hz en HDR 12 bits avec DSC, sans établir le débit FRL exact. Les autres profils restent inchangés. Un débit brut connu ne suffit pas à renseigner le budget vidéo net utilisé par le moteur.
+
 ## Données, sauvegarde et validation
 
 Les caractéristiques informatives se trouvent dans `Device.gpu`, avec leur source et les références par propriété. Les capacités des sorties restent dans `Device.ports`, utilisées par le moteur. La mémoire, CUDA, les fréquences et la puissance n’altèrent pas à elles seules le diagnostic du transport vidéo et ne prédisent pas les images par seconde d’un jeu.

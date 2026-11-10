@@ -1,4 +1,12 @@
-import type { Device, MotherboardId, MotherboardSpecifications, Port, Source } from './types';
+import type {
+  Device,
+  MotherboardId,
+  MotherboardSpecifications,
+  Port,
+  Source,
+  VideoReference,
+} from './types';
+import { HDMI_FRL_SOURCE, HDMI_FRL_FRAMING } from './gpus';
 
 const checkedAt = '2026-11-10';
 export const ASROCK_B850_SOURCE: Source = {
@@ -43,7 +51,77 @@ export interface MotherboardCatalogEntry {
   outputs: Port[];
 }
 
-function videoPort(id: string, label: string, connector: string, source: Source): Port {
+const asrockHdmi: VideoReference = {
+  version: 'HDMI 2.1',
+  transport: 'TMDS / FRL8G · 4 voies à 8 Gbit/s',
+  laneCount: 4,
+  laneRateGbps: 8,
+  rawBandwidthGbps: 32,
+  maxMode: 'Jusqu’à 3840 × 2160 à 120 Hz, selon le processeur',
+  notes: [
+    'Le manuel ASRock indique FRL8G, HDR et HDCP 2.3. Le tableau FRL établit 4 × 8 = 32 Gbit/s bruts.',
+    'Le circuit graphique du CPU et son activation restent à documenter. Timings, profondeurs de couleur et DSC ne sont pas établis par ce plafond.',
+    'Le débit brut ne constitue pas un budget vidéo utilisable : codage, FEC et paquets doivent être pris en compte.',
+  ],
+  source: ASROCK_B850_SOURCE,
+  evidence: {
+    connector: ASROCK_B850_MANUAL,
+    rawBandwidthGbps: HDMI_FRL_SOURCE,
+    framing: HDMI_FRL_FRAMING,
+  },
+};
+const asrockUsbC: VideoReference = {
+  version: 'DisplayPort 1.4a sur USB-C',
+  transport: 'DP Alt Mode · HBR3 · USB32_TC1 arrière',
+  laneCount: null,
+  laneRateGbps: 8.1,
+  rawBandwidthGbps: null,
+  maxMode: 'Jusqu’à 3840 × 2160 à 60 Hz, selon le processeur',
+  notes: [
+    'Cette prise USB-C 5 Gb/s assure la vidéo ; la prise USB-C 10 Gb/s arrière est distincte et n’a pas de vidéo documentée.',
+    'HBR3 désigne le débit par voie. Le nombre de voies allouées n’est pas publié ; ni 5 Gb/s USB ni HBR3 seul ne fixe le budget vidéo de la prise.',
+    'La vidéo vient du CPU. DSC, profondeur de couleur et timings restent à documenter.',
+  ],
+  source: ASROCK_B850_SOURCE,
+  evidence: { connector: ASROCK_B850_MANUAL },
+};
+const msiHdmi: VideoReference = {
+  version: 'HDMI 2.1',
+  transport: 'FRL · débit non précisé par MSI',
+  laneCount: null,
+  laneRateGbps: null,
+  rawBandwidthGbps: null,
+  maxMode: 'Jusqu’à 7680 × 4320 à 60 Hz, selon le processeur',
+  notes: [
+    'MSI confirme HDMI 2.1 FRL, mais ne précise pas le débit FRL de cette sortie ; 48 Gbit/s ne peut pas être déduit du numéro HDMI.',
+    'Circuit graphique du CPU requis. Profondeurs de couleur, timings détaillés et DSC ne sont pas documentés pour ce mode dans ces références.',
+  ],
+  source: MSI_X870E_SOURCE,
+  evidence: { connector: MSI_X870E_MANUAL },
+};
+const msiUsb4: VideoReference = {
+  version: 'DisplayPort 1.4 sur USB-C',
+  transport: 'USB4 · DP HBR3 · données USB jusqu’à 40 Gb/s',
+  laneCount: null,
+  laneRateGbps: 8.1,
+  rawBandwidthGbps: null,
+  maxMode: 'Jusqu’à 3840 × 2160 à 60 Hz par prise, selon le processeur',
+  notes: [
+    'Les deux USB4 arrière ont une vidéo documentée. Les deux autres USB-C 10 Gb/s et le connecteur frontal USB-C 20 Gb/s n’ont pas de vidéo documentée.',
+    'Le débit USB4 de 40 Gb/s est un débit de données, pas le budget vidéo DP. Le nombre de voies allouées n’est pas établi.',
+    'Circuit graphique du CPU requis ; DSC, profondeur de couleur et timings restent à documenter.',
+  ],
+  source: MSI_X870E_SOURCE,
+  evidence: { connector: MSI_X870E_MANUAL },
+};
+
+function videoPort(
+  id: string,
+  label: string,
+  connector: string,
+  source: Source,
+  videoReference: VideoReference,
+): Port {
   return {
     id,
     label,
@@ -57,6 +135,7 @@ function videoPort(id: string, label: string, connector: string, source: Source)
     modeListComplete: false,
     supportedColorDepths: null,
     source,
+    videoReference: structuredClone(videoReference),
   };
 }
 
@@ -131,12 +210,19 @@ export const MOTHERBOARD_CATALOG: MotherboardCatalogEntry[] = [
       },
     },
     outputs: [
-      videoPort('hdmi-out', 'HDMI 2.1 · TMDS / FRL8G · selon CPU', 'hdmi', ASROCK_B850_SOURCE),
+      videoPort(
+        'hdmi-out',
+        'HDMI 2.1 · TMDS / FRL8G · selon CPU',
+        'hdmi',
+        ASROCK_B850_SOURCE,
+        asrockHdmi,
+      ),
       videoPort(
         'usb-c-dp-out',
         'USB-C 5 Gb/s · DP 1.4a HBR3 · selon CPU',
         'usb-c',
         ASROCK_B850_SOURCE,
+        asrockUsbC,
       ),
     ],
   },
@@ -215,18 +301,20 @@ export const MOTHERBOARD_CATALOG: MotherboardCatalogEntry[] = [
       },
     },
     outputs: [
-      videoPort('hdmi-out', 'HDMI 2.1 FRL · selon CPU', 'hdmi', MSI_X870E_SOURCE),
+      videoPort('hdmi-out', 'HDMI 2.1 FRL · selon CPU', 'hdmi', MSI_X870E_SOURCE, msiHdmi),
       videoPort(
         'usb4-1-out',
         'USB4 n° 1 · USB-C · DP 1.4 HBR3 · selon CPU',
         'usb-c',
         MSI_X870E_SOURCE,
+        msiUsb4,
       ),
       videoPort(
         'usb4-2-out',
         'USB4 n° 2 · USB-C · DP 1.4 HBR3 · selon CPU',
         'usb-c',
         MSI_X870E_SOURCE,
+        msiUsb4,
       ),
     ],
   },

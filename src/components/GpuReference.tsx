@@ -1,5 +1,6 @@
 import { Cpu, ExternalLink, Info } from 'lucide-react';
 import type { Device } from '../domain';
+import { VideoReferenceNotes } from './VideoReferenceNotes';
 
 const number = (value: number | null, unit = '') =>
   value === null
@@ -18,6 +19,10 @@ export function GpuReference({ device }: { device: Device }) {
       (port) =>
         port.source.kind === 'user' ||
         Object.values(port.evidence ?? {}).some((source) => source.kind === 'user') ||
+        port.videoReference?.source.kind === 'user' ||
+        Object.values(port.videoReference?.evidence ?? {}).some(
+          (source) => source.kind === 'user',
+        ) ||
         port.dscProfiles?.some((profile) => profile.source.kind === 'user'),
     );
   const videoPorts = device.ports.filter((port) =>
@@ -72,6 +77,7 @@ export function GpuReference({ device }: { device: Device }) {
       )}
       <details className="reference-notes gpu-details">
         <summary>Spécifications complètes</summary>
+        <VideoReferenceNotes ports={device.ports} />
         <dl className="reference-specs">
           <div>
             <dt>Cœurs CUDA</dt>

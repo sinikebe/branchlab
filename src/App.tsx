@@ -684,6 +684,9 @@ export function App() {
             : []),
           ...device.ports.flatMap((port) => [
             port.source,
+            ...(port.videoReference
+              ? [port.videoReference.source, ...Object.values(port.videoReference.evidence ?? {})]
+              : []),
             ...Object.values(port.evidence ?? {}),
             ...(port.dscProfiles ?? []).map((profile) => profile.source),
           ]),
@@ -1262,7 +1265,12 @@ export function App() {
                           {source.ports.map((port) => (
                             <div key={port.id}>
                               <span>{port.label}</span>
-                              <strong>{format(port.maxPayloadGbps)}</strong>
+                              <strong>
+                                {port.maxPayloadGbps === null &&
+                                port.videoReference?.rawBandwidthGbps != null
+                                  ? `${port.videoReference.rawBandwidthGbps.toLocaleString('fr-FR')} Gbit/s bruts`
+                                  : format(port.maxPayloadGbps)}
+                              </strong>
                             </div>
                           ))}
                         </div>

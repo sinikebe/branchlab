@@ -31,6 +31,8 @@ La fiche MSI mentionne DDR5-9000 OC, mais son détail Ryzen 9000 en configuratio
 
 Aucune de ces cartes n’a de prise DisplayPort plein format. Les autres USB-C ne reçoivent pas de capacité vidéo par assimilation. Les boutons de maintenance ne sont pas comptés comme connecteurs.
 
+Le HDMI ASRock annonce aussi HDR et HDCP 2.3. Son FRL8G correspond à quatre voies de 8 Gbit/s, soit 32 Gbit/s bruts, d’après les [configurations FRL décrites par Texas Instruments](https://www.ti.com/lit/an/slla598/slla598.pdf). Cette valeur décrit la liaison physique ; elle ne remplace pas le budget vidéo utile du moteur. Le débit FRL exact du HDMI MSI et le nombre de voies DP allouées aux USB-C des deux cartes restent inconnus. Voir [la documentation des sorties et des débits bruts](video-outputs-4090-5080-am5.md).
+
 ## Extensions et connexions internes
 
 **ASRock** : PCIE1 est physiquement x16, jusqu’à Gen5 x16 avec Ryzen 7000/9000, Gen4 x8 avec Phoenix 1 et Gen4 x4 avec Phoenix 2. PCIE2 est physiquement x16 mais câblé Gen4 x4 ; M2_3 occupé le désactive. M2_1 est Gen5 x4, M2_2 et M2_3 Gen4 x4, M2_4 Gen3 x4. Avec Ryzen 8000, M2_1 passe à Gen4 ; Phoenix 2 réduit M2_2 à x2. SATA3_1 ou SATA3_2 occupé réduit M2_4 à Gen3 x2. Quatre SATA 6 Gb/s sont présents.
