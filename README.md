@@ -22,7 +22,7 @@ npm run test:e2e
 npm run build
 ```
 
-La commande `check` exécute les contrôles de types, de style et les tests du moteur, du stockage et de validation des imports. `test:e2e` vérifie les parcours de l’interface dans Chromium. La construction produit `dist/`, publiable sur un hébergement statique. Aucune publication publique n’est configurée.
+La commande `check` exécute les contrôles de types, de style et les tests du moteur, du stockage et de validation des imports. `test:e2e` vérifie les parcours de l’interface dans Chromium. La construction produit `dist/`, publiable sur un hébergement statique. `npm run hosting:check` vérifie ensuite la configuration Cloudflare sans publier ni demander de compte.
 
 ## Utiliser la première version
 
@@ -41,9 +41,17 @@ Le brouillon est sauvegardé dans IndexedDB sur ce navigateur. Effacer les donn�
 - Une fois la fusion validée et le travail terminé, supprimer la branche de fonctionnalité localement et sur `origin`, après vérification que tous ses commits sont intégrés à `dev`. Conserver `dev`, `main` et les branches non fusionnées.
 - L’instance de développement du réseau local suit uniquement `origin/dev`.
 - Une release est préparée et fusionnée séparément dans `main` ; aucune release automatique n’est créée.
-- GitHub Actions vérifie les branches de fonctionnalité, `dev`, `main` et les demandes de fusion avec le runner self-hosted de ce serveur. Il ne déploie rien.
+- GitHub Actions vérifie les branches de fonctionnalité, `dev`, `main` et les demandes de fusion avec le runner self-hosted de ce serveur. Un envoi sur `main` publie ensuite la construction validée sur Cloudflare ; les autres branches et demandes de fusion ne publient pas.
 
 Les protections de branches et l’obligation de revue ne sont pas imposées par les fichiers de workflow : elles se configurent dans les paramètres GitHub.
+
+### Hébergement public gratuit
+
+La publication est préparée pour **Cloudflare Workers Static Assets**, en servant uniquement le dossier `dist/`. Aucun code serveur, base de données ou abonnement payant n’est nécessaire pour cette version. Le choix de l’hébergement laisse possible l’ajout de publicités plus tard ; aucune publicité n’est intégrée aujourd’hui.
+
+La première mise en ligne nécessite les secrets GitHub Actions `CLOUDFLARE_ACCOUNT_ID` et `CLOUDFLARE_API_TOKEN`, puis une release dans `main`. Les fichiers de configuration seuls ne créent pas le site. Le dépôt reste privé, l’instance de développement suit toujours `dev` sur le réseau local, et seules les releases de `main` sont publiées.
+
+Voir [la configuration Cloudflare, les limites de l’offre gratuite et la connexion du compte](docs/hosting.md).
 
 ### Runner CI sur le serveur de développement
 
@@ -51,7 +59,7 @@ Le workflow utilise les labels `[self-hosted, Linux, X64]`, présents sur le run
 
 La CI installe la version Node indiquée dans `.node-version`, les dépendances verrouillées et Chromium dans le cache du compte runner, puis lance les mêmes contrôles, parcours navigateur et construction. Les bibliothèques système de Chromium sont déjà installées sur cette machine ; sur un nouveau serveur, un administrateur doit les préparer avec `npx playwright install-deps chromium`. Les tâches CI n’ont pas besoin de droits administrateur.
 
-Les tests de la CI utilisent uniquement `127.0.0.1:5177`, via `BRANCHLAB_E2E_PORT`. Les tests locaux et ceux de la mise à jour automatique gardent le port `5175` par défaut. Chaque exécution démarre son propre serveur et échoue si son port est occupé, afin de ne jamais valider un autre checkout. La CI limite les tests navigateur à deux processus et annule les validations périmées d’une même branche. Le serveur LAN sur le port `5173` continue à servir la dernière version validée.
+Les tests de la CI utilisent uniquement `127.0.0.1:5177`, via `BRANCHLAB_E2E_PORT`. Les tests locaux et ceux de la mise à jour automatique gardent le port `5175` par défaut. Chaque exécution démarre son propre serveur et échoue si son port est occupé, afin de ne jamais valider un autre checkout. La CI limite les tests navigateur à deux processus et annule les validations périmées d’une même branche, sauf sur `main` pour laisser une publication en cours se terminer. Le serveur LAN sur le port `5173` continue à servir la dernière version validée.
 
 Les captures et traces navigateur sont enregistrées dans `test-results/` du checkout concerné, avec un dossier par test ; aucun fichier partagé dans `/tmp` n’est utilisé.
 
