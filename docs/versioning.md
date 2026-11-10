@@ -6,7 +6,13 @@ La première version visible dans l’interface est **0.2.0**. L’entrée **0.1
 
 ## Préparer une version
 
-Pour une nouvelle fonctionnalité, augmenter le numéro mineur (`0.2.0` → `0.3.0`). Pour une correction utilisateur, augmenter le correctif (`0.2.0` → `0.2.1`). Une rupture majeure de comportement ou de format nécessite une décision explicite sur le numéro majeur. Les versions actuellement prises en charge suivent le format stable `X.Y.Z`, sans suffixe de branche ou de construction.
+Les versions suivent le format stable `major.minor.patch`, sans suffixe de branche ou de construction. Les règles ci-dessous s’appliquent aux prochaines modifications : la version **0.3.0** et les anciennes entrées gardent leur numéro.
+
+- **Contenu uniquement** : augmenter le correctif de un (`0.3.0` → `0.3.1`). Cela couvre les ajouts ou corrections de catalogue matériel, de caractéristiques, de sources et de textes, tant que l’interface ne change pas.
+- **Changement d’interface** : augmenter le numéro mineur de un et remettre le correctif à zéro (`0.3.2` → `0.4.0`). Cette règle s’applique aussi à une modification mêlant interface et contenu.
+- **Correction de logique sans changement d’interface** : augmenter le correctif de un.
+- **Rupture majeure de comportement ou de format** : prendre une décision explicite sur le numéro majeur.
+- **Documentation, infrastructure ou fusion uniquement** : conserver la version utilisateur.
 
 Avant de fusionner la fonctionnalité dans `dev` :
 
@@ -18,7 +24,7 @@ Avant de fusionner la fonctionnalité dans `dev` :
 
 Exemple de note utilisateur : « Comparez les débits avec et sans compression pour votre écran. » Une description comme « Ajout d’une fonction de calcul dans le moteur TypeScript » appartient à la description technique du changement, pas au changelog utilisateur.
 
-La même version suit ensuite la fonctionnalité de sa branche vers `dev`, puis vers `main`. Une correction en cours sur une branche de fonctionnalité peut compléter son entrée tant qu’elle ne fait pas encore partie de la base de comparaison. Une fusion ou un changement portant seulement sur l’infrastructure ne crée pas artificiellement une nouvelle version utilisateur.
+La même version suit ensuite la modification de sa branche vers `dev`, puis vers `main`. Une correction en cours sur une branche de fonctionnalité peut compléter son entrée tant qu’elle ne fait pas encore partie de la base de comparaison. Une fusion ou un changement portant seulement sur la documentation ou l’infrastructure ne crée pas artificiellement une nouvelle version utilisateur.
 
 ## Vérifications automatiques
 
@@ -36,4 +42,4 @@ La variante `npm run changelog:check -- --base <référence Git>` compare égale
 
 Pour une branche de fonctionnalité, prendre comme référence son ancêtre commun avec `dev`, afin de ne pas demander une version différente à chaque commit intermédiaire. Pour une demande de fusion, utiliser la branche cible ; pour une mise à jour de `dev` ou de `main`, utiliser la révision précédente. L’historique de la référence doit avoir été récupéré : une référence absente provoque un échec, jamais une validation silencieuse. L’introduction initiale du changelog est autorisée lorsqu’il n’existait pas dans la base.
 
-Le contrôle vérifie des règles concrètes de cohérence ; il ne peut pas juger automatiquement qu’une phrase est utile ou exempte de jargon. La relecture du texte utilisateur reste nécessaire. Les dépendances transitives modifiées uniquement dans le verrou ne sont pas interprétées automatiquement comme une nouvelle fonctionnalité : décider du numéro et de la note selon leur effet réel sur l’application.
+Le contrôle automatique vérifie la cohérence des versions et préserve l’historique. La distinction entre contenu seul et changement d’interface se fait à la relecture, selon l’effet réel du changement, pas d’après le nom des fichiers : un même composant peut contenir du texte et de l’interface. Le contrôle ne peut pas non plus juger automatiquement qu’une phrase est utile ou exempte de jargon ; la relecture du texte utilisateur reste nécessaire. Les dépendances transitives modifiées uniquement dans le verrou ne sont pas interprétées automatiquement comme une nouvelle fonctionnalité : décider du numéro et de la note selon leur effet réel sur l’application.

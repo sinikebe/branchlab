@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.3.0",
+    "date": "2026-11-10",
+    "changes": [
+      "Retrouvez la gamme GeForce RTX 50 de bureau, de la RTX 5050 à la 5090, avec les deux versions mémoire de la 5060 Ti.",
+      "Consultez les connecteurs, la mémoire, les fréquences et les caractéristiques d’alimentation de chaque carte, avec leurs sources NVIDIA."
+    ]
+  },
+  {
     "version": "0.2.0",
     "date": "2026-11-10",
     "changes": [

@@ -1,24 +1,8 @@
 import type { Cable, Device, DisplayId, GpuId, Port, Setup, Source, VideoMode } from './types';
+import { createGpu } from './gpus';
+export * from './gpus';
 
 const checkedAt = '2026-11-10';
-export const NVIDIA_4090: Source = {
-  kind: 'manufacturer',
-  label: 'NVIDIA — GeForce RTX 4090, design de référence',
-  checkedAt,
-  url: 'https://www.nvidia.com/en-us/geforce/graphics-cards/40-series/rtx-4090/',
-};
-export const NVIDIA_5080: Source = {
-  kind: 'manufacturer',
-  label: 'NVIDIA — GeForce RTX 5080, design de référence',
-  checkedAt,
-  url: 'https://www.nvidia.com/en-gb/geforce/graphics-cards/50-series/rtx-5080/',
-};
-export const DP_SOURCE: Source = {
-  kind: 'standard',
-  label: 'VESA — Débits DisplayPort (charge utile après codage)',
-  checkedAt,
-  url: 'https://vesa.org/featured-articles/vesa-publishes-displayport-2-0-video-standard-enabling-support-for-beyond-8k-resolutions-higher-refresh-rates-for-4k-hdr-and-virtual-reality-applications/',
-};
 export const DEMO_SOURCE: Source = {
   kind: 'demo',
   label: 'Profil fictif de démonstration — aucune référence commerciale',
@@ -153,59 +137,6 @@ VIDEO_MODES.push(
     source: CORSAIR_XENEON_GUIDE,
   },
 );
-
-export const GPU_CATALOG: { id: GpuId; name: string; description: string; url: string }[] = [
-  {
-    id: 'rtx4090',
-    name: 'NVIDIA GeForce RTX 4090',
-    description: 'Référence NVIDIA · 3 × DP 1.4a · 1 × HDMI 2.1a',
-    url: NVIDIA_4090.url!,
-  },
-  {
-    id: 'rtx5080',
-    name: 'NVIDIA GeForce RTX 5080',
-    description: 'Référence NVIDIA · 3 × DP 2.1b UHBR20 · 1 × HDMI 2.1b',
-    url: NVIDIA_5080.url!,
-  },
-];
-
-export function createGpu(id: GpuId): Device {
-  const source = id === 'rtx4090' ? NVIDIA_4090 : NVIDIA_5080;
-  const payload = id === 'rtx4090' ? 25.92 : 77.37;
-  const ports: Port[] = [1, 2, 3].map((n) => ({
-    id: `dp-${n}`,
-    label: `DisplayPort ${n} · ${id === 'rtx4090' ? '1.4a' : '2.1b'}`,
-    connector: 'displayport',
-    role: 'source',
-    protocols: ['displayport'],
-    maxPayloadGbps: payload,
-    dsc: true,
-    supportedModeIds: null,
-    supportedColorDepths: [8, 10, 12],
-    source,
-    evidence: { maxPayloadGbps: DP_SOURCE },
-  }));
-  ports.push({
-    id: 'hdmi-1',
-    label: `HDMI · ${id === 'rtx4090' ? '2.1a' : '2.1b'}`,
-    connector: 'hdmi',
-    role: 'source',
-    protocols: ['hdmi'],
-    maxPayloadGbps: null,
-    dsc: true,
-    supportedModeIds: null,
-    supportedColorDepths: [8, 10, 12],
-    source,
-  });
-  return {
-    id: 'gpu-1',
-    name: GPU_CATALOG.find((gpu) => gpu.id === id)!.name,
-    kind: 'gpu',
-    ports,
-    routes: [],
-    source,
-  };
-}
 
 export const CABLE_PROFILES: {
   id: string;

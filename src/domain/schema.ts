@@ -82,6 +82,28 @@ export const SETUP_SCHEMA: z.ZodType<Setup> = z
           routes: z.array(route).max(500),
           source,
           catalogId: id.optional(),
+          gpu: z
+            .object({
+              architecture: name,
+              cudaCores: z.number().int().positive().max(1000000),
+              memoryGB: z.number().positive().max(100000),
+              memoryType: name,
+              memoryBusBits: z.number().int().positive().max(100000),
+              memoryBandwidthGBps: z.number().positive().max(1000000).nullable(),
+              baseClockGHz: z.number().positive().max(1000).nullable(),
+              boostClockGHz: z.number().positive().max(1000).nullable(),
+              pcieGeneration: name.nullable(),
+              pcieLanes: z.number().int().positive().max(128).nullable(),
+              totalGraphicsPowerW: z.number().positive().max(100000).nullable(),
+              recommendedSystemPowerW: z.number().positive().max(100000).nullable(),
+              powerConnectionNotes: z.array(z.string().min(1).max(2000)).max(100),
+              maxDisplays: z.number().int().positive().max(1000).nullable(),
+              displaySupportNotes: z.array(z.string().min(1).max(2000)).max(100),
+              notes: z.array(z.string().min(1).max(2000)).max(100),
+              source,
+              evidence: z.record(z.string(), source).optional(),
+            })
+            .optional(),
           display: z
             .object({
               diagonalInches: z.number().positive().max(1000),
