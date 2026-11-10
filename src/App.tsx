@@ -237,7 +237,12 @@ export function App() {
   const [setup, setSetup] = useState<Setup>(() => createSetup());
   const [ready, setReady] = useState(false);
   const [canSave, setCanSave] = useState(false);
-  const [saveState, setSaveState] = useState('Chargement…');
+  const [saveResult, setSaveResult] = useState<{ setup: Setup | null; status: string }>({
+    setup: null,
+    status: 'Chargement…',
+  });
+  const saveState =
+    ready && canSave && saveResult.setup !== setup ? 'Enregistrement…' : saveResult.status;
   const [selection, setSelection] = useState<Selection>('cable');
   const [panel, setPanel] = useState<'diagnosis' | 'equipment'>('diagnosis');
   const [modal, setModal] = useState<'library' | 'sources' | 'guide' | 'changelog' | null>(null);
@@ -299,7 +304,7 @@ export function App() {
       .catch((error) => {
         if (active) {
           setNotice(error.message);
-          setSaveState('Sauvegarde indisponible');
+          setSaveResult({ setup: null, status: 'Sauvegarde indisponible' });
           setReady(true);
         }
       });
@@ -309,18 +314,25 @@ export function App() {
   }, []);
   useEffect(() => {
     if (!ready || !canSave) return;
-    setSaveState('Enregistrement…');
+    let active = true;
+    setSaveResult({ setup, status: 'Enregistrement…' });
     const timer = setTimeout(() => {
       saveSetup(setup)
-        .then(() => setSaveState('Enregistré sur cet appareil'))
+        .then(() => {
+          if (active) setSaveResult({ setup, status: 'Enregistré sur cet appareil' });
+        })
         .catch(() => {
-          setSaveState('Échec de sauvegarde');
+          if (!active) return;
+          setSaveResult({ setup, status: 'Échec de sauvegarde' });
           setNotice(
             'La sauvegarde locale est indisponible. Exportez votre setup pour le conserver.',
           );
         });
     }, 400);
-    return () => clearTimeout(timer);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, [setup, ready, canSave]);
   useEffect(() => {
     if (!notice) return;
