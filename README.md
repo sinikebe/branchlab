@@ -22,7 +22,13 @@ npm run test:e2e
 npm run build
 ```
 
-La commande `check` exécute les contrôles de types, de style et les tests du moteur, du stockage et de validation des imports. `test:e2e` vérifie les parcours de l’interface dans Chromium. La construction produit `dist/`, publiable sur un hébergement statique. `npm run hosting:check` vérifie ensuite la configuration Cloudflare sans publier ni demander de compte.
+La commande `check` vérifie la version et le changelog, puis exécute les contrôles de types, de style et les tests du moteur, du stockage et de validation des imports. `test:e2e` vérifie les parcours de l’interface dans Chromium. La construction produit `dist/`, publiable sur un hébergement statique, après contrôle du changelog. `npm run hosting:check` vérifie ensuite la configuration Cloudflare sans publier ni demander de compte.
+
+## Version et nouveautés
+
+Le bas de page affiche la version de l’application et un bouton « Nouveautés ». L’historique présente des notes courtes en français, centrées sur ce qui change pour l’utilisateur. Il ne contient pas de détails de déploiement ou d’infrastructure.
+
+La version provient de `package.json` et les notes de `src/changelog.json`. Elles sont intégrées ensemble à la construction, sans requête réseau supplémentaire. Une évolution utilisateur doit augmenter la version et ajouter son entrée avant fusion dans `dev` ; la publication dans `main` conserve ces mêmes notes. Les contrôles bloquent une version sans notes ou un changement de l’application qui n’a pas été versionné. Voir [la procédure de versionnement](docs/versioning.md).
 
 ## Utiliser la première version
 
