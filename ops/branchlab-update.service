@@ -1,0 +1,14 @@
+[Unit]
+Description=Validate and update BranchLab from origin/dev
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=HOME=/root
+ExecStart=/bin/bash /root/branchlab/scripts/update-dev.sh
+TimeoutStartSec=15min
+NoNewPrivileges=true
+PrivateTmp=true

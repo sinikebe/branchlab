@@ -1,0 +1,10 @@
+[Unit]
+Description=Check BranchLab dev branch every minute
+
+[Timer]
+OnBootSec=30s
+OnUnitInactiveSec=60s
+Unit=branchlab-update.service
+
+[Install]
+WantedBy=timers.target

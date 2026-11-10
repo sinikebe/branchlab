@@ -1,0 +1,1471 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ReactFlow,
+  Background,
+  Controls,
+  Handle,
+  Position,
+  useNodesState,
+  type Node,
+  type NodeProps,
+  type ReactFlowInstance,
+  type Connection as FlowConnection,
+} from '@xyflow/react';
+import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  ArrowUpRight,
+  BookOpen,
+  Cable as CableIcon,
+  Check,
+  CheckCircle2,
+  ChevronRight,
+  CircleHelp,
+  Cpu,
+  ExternalLink,
+  GitBranch,
+  Info,
+  Layers3,
+  Link2,
+  Monitor,
+  MousePointer2,
+  Plus,
+  RotateCcw,
+  Undo2,
+  X,
+  Zap,
+} from 'lucide-react';
+import {
+  analyzeSetup,
+  createSetup,
+  createGpu,
+  createCable,
+  CABLE_PROFILES,
+  GPU_CATALOG,
+  VIDEO_MODES,
+  type Setup,
+  type Device,
+  type GpuId,
+  type Status,
+} from './domain';
+import { loadSetup, saveSetup, parseSetup, exportSetup } from './storage';
+import { validateEditorSetup } from './editor-validation';
+
+type EquipmentData = { device: Device; selected: boolean; onSelect: () => void };
+type EquipmentNode = Node<EquipmentData, 'equipment'>;
+type Selection = 'gpu' | 'display' | 'cable';
+const statusText: Record<Status, string> = {
+  compatible: 'Compatible',
+  incompatible: 'Objectif non atteint',
+  indeterminate: 'À vérifier',
+};
+const format = (value: number | null) =>
+  value === null
+    ? 'Non documenté'
+    : `${value.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} Gbit/s`;
+const connectorName = (id: string) =>
+  id === 'displayport' ? 'DisplayPort' : id === 'hdmi' ? 'HDMI' : id;
+const userSource = { kind: 'user' as const, label: 'Caractéristique déclarée par l’utilisateur' };
+
+function HardwareArt({ display = false }: { display?: boolean }) {
+  return display ? (
+    <div className="monitor-art" aria-hidden="true">
+      <div className="monitor-glass">
+        <div className="landscape landscape-one" />
+        <div className="landscape landscape-two" />
+        <div className="sun" />
+        <span>BranchLab</span>
+      </div>
+      <div className="monitor-neck" />
+      <div className="monitor-foot" />
+    </div>
+  ) : (
+    <div className="gpu-art" aria-hidden="true">
+      <div className="gpu-bracket" />
+      <div className="gpu-stripe" />
+      <div className="fan">
+        <i />
+        <i />
+        <i />
+        <i />
+        <i />
+        <i />
+      </div>
+      <div className="fan fan-second">
+        <i />
+        <i />
+        <i />
+        <i />
+        <i />
+        <i />
+      </div>
+      <span>GEFORCE RTX</span>
+      <div className="gpu-pins" />
+    </div>
+  );
+}
+
+function Equipment({ data }: NodeProps<EquipmentNode>) {
+  const display = data.device.kind === 'display';
+  return (
+    <article className={`equipment-node ${data.selected ? 'chosen' : ''}`}>
+      <button
+        className="node-main nodrag"
+        onClick={data.onSelect}
+        aria-label={`Inspecter ${data.device.name}`}
+      >
+        <div className="node-eyebrow">
+          <span className={`node-icon ${display ? 'purple' : ''}`}>
+            {display ? <Monitor size={15} /> : <Cpu size={15} />}
+          </span>
+          {display ? 'ÉCRAN' : data.device.kind === 'gpu' ? 'CARTE GRAPHIQUE' : 'SOURCE VIDÉO'}
+          <span className="node-menu">···</span>
+        </div>
+        <HardwareArt display={display} />
+        <h3>{data.device.name.replace('NVIDIA GeForce ', '')}</h3>
+        <p>
+          {data.device.source.kind === 'demo'
+            ? 'Profil de démonstration · personnalisable'
+            : data.device.kind === 'gpu'
+              ? 'NVIDIA · design de référence'
+              : 'Capacités à renseigner'}
+        </p>
+      </button>
+      <div className="node-ports">
+        {data.device.ports.map((port) => (
+          <div className={`port-row ${display ? 'incoming' : ''}`} key={port.id}>
+            {display && (
+              <Handle
+                type="target"
+                id={port.id}
+                position={Position.Left}
+                aria-label={`Entrée ${port.label}`}
+              />
+            )}
+            <span className={`port-shape ${port.connector}`} />
+            <span>{port.label}</span>
+            <span className="port-dot" />
+            {!display && (
+              <Handle
+                type="source"
+                id={port.id}
+                position={Position.Right}
+                aria-label={`Sortie ${port.label}`}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+    </article>
+  );
+}
+const nodeTypes = { equipment: Equipment };
+
+export function App() {
+  const [setup, setSetup] = useState<Setup>(() => createSetup());
+  const [ready, setReady] = useState(false);
+  const [canSave, setCanSave] = useState(false);
+  const [saveState, setSaveState] = useState('Chargement…');
+  const [selection, setSelection] = useState<Selection>('cable');
+  const [panel, setPanel] = useState<'diagnosis' | 'equipment'>('diagnosis');
+  const [modal, setModal] = useState<'library' | 'sources' | 'guide' | null>(null);
+  const [notice, setNotice] = useState('');
+  const [pendingOutput, setPendingOutput] = useState('dp-1');
+  const [pendingInput, setPendingInput] = useState('dp-in');
+  const [history, setHistory] = useState<Setup[]>([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<EquipmentNode>([]);
+  const upload = useRef<HTMLInputElement>(null);
+  const canvas = useRef<HTMLDivElement>(null);
+  const [flow, setFlow] = useState<ReactFlowInstance<EquipmentNode> | null>(null);
+  const source = setup.devices.find((device) => device.id === setup.goal.sourceDeviceId)!;
+  const display = setup.devices.find((device) => device.id === setup.goal.displayDeviceId)!;
+  const cable = setup.cables[0];
+  const connection = setup.connections[0];
+  const analysis = analyzeSetup(setup);
+  const mode = analysis.requestedMode;
+  const sourcePort =
+    source.ports.find((port) => port.id === (connection?.from.portId ?? pendingOutput)) ??
+    source.ports[0];
+  const displayPort =
+    display.ports.find((port) => port.id === (connection?.to.portId ?? pendingInput)) ??
+    display.ports[0];
+
+  useEffect(() => {
+    let active = true;
+    loadSetup()
+      .then((saved) => {
+        if (active) {
+          if (saved) {
+            validateEditorSetup(saved);
+            setSetup(saved);
+          }
+          setCanSave(true);
+          setReady(true);
+        }
+      })
+      .catch((error) => {
+        if (active) {
+          setNotice(error.message);
+          setSaveState('Sauvegarde indisponible');
+          setReady(true);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (!ready || !canSave) return;
+    setSaveState('Enregistrement…');
+    const timer = setTimeout(() => {
+      saveSetup(setup)
+        .then(() => setSaveState('Enregistré sur cet appareil'))
+        .catch(() => {
+          setSaveState('Échec de sauvegarde');
+          setNotice(
+            'La sauvegarde locale est indisponible. Exportez votre setup pour le conserver.',
+          );
+        });
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [setup, ready, canSave]);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(''), 8000);
+    return () => clearTimeout(timer);
+  }, [notice]);
+  useEffect(() => {
+    if (!modal) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setModal(null);
+      if (event.key !== 'Tab') return;
+      const focusable = [
+        ...document.querySelectorAll<HTMLElement>(
+          '.modal button, .modal a[href], .modal input, .modal select',
+        ),
+      ];
+      const first = focusable[0],
+        last = focusable.at(-1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      previouslyFocused?.focus();
+    };
+  }, [modal]);
+
+  const update = useCallback(
+    (change: (draft: Setup) => void) => {
+      const next = structuredClone(setup);
+      change(next);
+      setHistory((items) => [...items.slice(-19), setup]);
+      setSetup(next);
+      setCanSave(true);
+    },
+    [setup],
+  );
+  const replace = (next: Setup) => {
+    setHistory((items) => [...items.slice(-19), setup]);
+    setSetup(next);
+    setCanSave(true);
+  };
+  const selectDevice = useCallback((id: Selection) => {
+    setSelection(id);
+    setPanel('equipment');
+  }, []);
+
+  useEffect(() => {
+    setNodes((current) =>
+      [source, display].map((device, index) => ({
+        id: device.id,
+        type: 'equipment',
+        position: current.find((node) => node.id === device.id)?.position ?? {
+          x: index === 0 ? 60 : 485,
+          y: index === 0 ? 110 : 145,
+        },
+        data: {
+          device,
+          selected: panel === 'equipment' && selection === (index === 0 ? 'gpu' : 'display'),
+          onSelect: () => selectDevice(index === 0 ? 'gpu' : 'display'),
+        },
+      })),
+    );
+  }, [source, display, selection, panel, selectDevice, setNodes]);
+
+  useEffect(() => {
+    if (!flow || !canvas.current) return;
+    const observer = new ResizeObserver(() => {
+      requestAnimationFrame(() => {
+        void flow.fitView({ padding: 0.2, maxZoom: 1 });
+      });
+    });
+    observer.observe(canvas.current);
+    return () => observer.disconnect();
+  }, [flow, source.id]);
+
+  const setGpu = (id: GpuId) => {
+    update((draft) => {
+      draft.devices = draft.devices.filter(
+        (device) => device.kind !== 'gpu' && device.id !== 'motherboard-1',
+      );
+      draft.devices.unshift(createGpu(id));
+      draft.goal.sourceDeviceId = 'gpu-1';
+      if (draft.connections[0]) draft.connections[0].from = { deviceId: 'gpu-1', portId: 'dp-1' };
+    });
+    setModal(null);
+    selectDevice('gpu');
+  };
+  const changeOrigin = (motherboard: boolean) => {
+    if (!motherboard) {
+      setGpu(
+        setup.devices.find((device) => device.kind === 'gpu')?.name.includes('5080')
+          ? 'rtx5080'
+          : 'rtx4090',
+      );
+      return;
+    }
+    update((draft) => {
+      const board: Device = {
+        id: 'motherboard-1',
+        name: 'Sortie de carte mère',
+        kind: 'other',
+        source: userSource,
+        routes: [],
+        ports: [
+          {
+            id: 'dp-out',
+            label: 'DisplayPort · non documenté',
+            connector: 'displayport',
+            role: 'source',
+            protocols: null,
+            maxPayloadGbps: null,
+            dsc: null,
+            supportedModeIds: null,
+            source: userSource,
+          },
+        ],
+      };
+      draft.devices = draft.devices.filter((device) => device.id !== board.id);
+      draft.devices.push(board);
+      draft.goal.sourceDeviceId = board.id;
+      if (draft.connections[0])
+        draft.connections[0].from = { deviceId: board.id, portId: 'dp-out' };
+    });
+  };
+  const onConnect = (link: FlowConnection) => {
+    if (
+      link.source !== source.id ||
+      link.target !== display.id ||
+      !link.sourceHandle ||
+      !link.targetHandle
+    )
+      return;
+    update((draft) => {
+      draft.connections = [
+        {
+          id: 'connection-1',
+          from: { deviceId: link.source, portId: link.sourceHandle! },
+          to: { deviceId: link.target, portId: link.targetHandle! },
+          cableId: draft.cables[0].id,
+        },
+      ];
+    });
+  };
+  const exportProject = () => {
+    const url = URL.createObjectURL(new Blob([exportSetup(setup)], { type: 'application/json' }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'branchlab-setup.json';
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+  const importProject = async (file?: File) => {
+    if (!file) return;
+    try {
+      if (file.size > 2 * 1024 * 1024) throw new Error('Ce fichier dépasse la limite de 2 Mio.');
+      const imported = parseSetup(await file.text());
+      validateEditorSetup(imported);
+      replace(imported);
+      setNotice('Votre setup a été importé.');
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : 'Import impossible. Le projet actuel est conservé.',
+      );
+    }
+    if (upload.current) upload.current.value = '';
+  };
+  const patchDisplayPort = (patch: Partial<typeof displayPort>) =>
+    update((draft) => {
+      const port = draft.devices
+        .find((device) => device.id === display.id)!
+        .ports.find((port) => port.id === displayPort.id)!;
+      Object.assign(port, patch, { source: userSource });
+      port.evidence = {
+        ...port.evidence,
+        ...Object.fromEntries(Object.keys(patch).map((key) => [key, userSource])),
+      };
+    });
+  const sources = [
+    ...new Map(
+      setup.devices
+        .flatMap((device) => [
+          device.source,
+          ...device.ports.flatMap((port) => [port.source, ...Object.values(port.evidence ?? {})]),
+        ])
+        .concat(setup.cables.map((item) => item.source))
+        .map((item) => [JSON.stringify(item), item]),
+    ).values(),
+  ];
+  const statusClass = analysis.status;
+
+  if (!ready)
+    return (
+      <div className="loading">
+        <GitBranch size={30} />
+        <p>Ouverture de votre atelier…</p>
+      </div>
+    );
+  return (
+    <div className="app-shell">
+      <header className="app-header">
+        <a className="brand" href="#" aria-label="BranchLab, atelier">
+          <span className="brand-symbol">
+            <GitBranch size={23} />
+          </span>
+          Branch<span>Lab</span>
+        </a>
+        <div className="header-divider" />
+        <div className="project-breadcrumb">
+          <span>Espace personnel</span>
+          <ChevronRight size={14} />
+          <strong>Mon setup</strong>
+        </div>
+        <span className="local-badge">
+          <span /> Instance locale
+        </span>
+        <button
+          className="header-help icon-button"
+          title="Guide de démarrage"
+          aria-label="Guide de démarrage"
+          onClick={() => setModal('guide')}
+        >
+          <CircleHelp size={19} />
+        </button>
+        <div className="avatar" title="Sans compte · données sur cet appareil">
+          B
+        </div>
+      </header>
+      <div className="workspace-shell">
+        <aside className="library-sidebar">
+          <div className="sidebar-label">VOTRE ESPACE</div>
+          <button className="sidebar-nav active" onClick={() => setPanel('diagnosis')}>
+            <Layers3 size={18} />
+            Mon atelier<span>01</span>
+          </button>
+          <button className="sidebar-nav" onClick={() => setModal('sources')}>
+            <BookOpen size={18} />
+            Sources & fiabilité
+          </button>
+          <div className="sidebar-separator" />
+          <div className="sidebar-label library-heading">
+            BIBLIOTHÈQUE <span>3</span>
+          </div>
+          <p className="sidebar-hint">Les premières briques de votre installation.</p>
+          {GPU_CATALOG.map((gpu) => (
+            <button className="library-item" key={gpu.id} onClick={() => setGpu(gpu.id)}>
+              <span className="library-icon">
+                <Cpu size={21} />
+              </span>
+              <span>
+                <strong>{gpu.name.replace('NVIDIA GeForce ', '')}</strong>
+                <small>NVIDIA · Carte graphique</small>
+              </span>
+              <Plus size={15} />
+            </button>
+          ))}
+          <button className="library-item" onClick={() => selectDevice('display')}>
+            <span className="library-icon purple">
+              <Monitor size={21} />
+            </span>
+            <span>
+              <strong>Écran personnalisé</strong>
+              <small>Profil à renseigner</small>
+            </span>
+            <ArrowUpRight size={15} />
+          </button>
+          <div className="library-note">
+            <Info size={14} />
+            <p>
+              Les modèles NVIDIA suivent le design de référence. Vérifiez les ports de votre carte
+              partenaire.
+            </p>
+          </div>
+          <div className="sidebar-bottom">
+            <span className="private-dot" /> Vos données restent ici.
+            <p>Sans compte. Sans envoi de votre setup.</p>
+            <button onClick={() => setModal('guide')}>
+              Découvrir BranchLab <ArrowUpRight size={13} />
+            </button>
+          </div>
+        </aside>
+        <main className="main-workspace">
+          <section className="workspace-intro">
+            <div>
+              <div className="eyebrow">L’ATELIER DE CONNEXIONS</div>
+              <h1>
+                Votre setup, au clair<span>.</span>
+              </h1>
+              <p>Reliez vos équipements. Comprenez ce qui fonctionne.</p>
+            </div>
+            <button className="button primary" onClick={() => setModal('library')}>
+              <Plus size={17} />
+              Équipements
+            </button>
+          </section>
+          <section className="studio" aria-label="Éditeur de votre installation">
+            <div className="studio-toolbar">
+              <div className="project-title">
+                <span className="project-dot" />
+                <input
+                  aria-label="Nom du setup"
+                  value={setup.name}
+                  onChange={(event) =>
+                    update((draft) => {
+                      draft.name = event.target.value.slice(0, 100) || 'Mon setup';
+                    })
+                  }
+                />
+                <span className="draft-badge">Brouillon</span>
+              </div>
+              <div className="toolbar-actions">
+                <button
+                  className="icon-button"
+                  aria-label="Annuler la dernière modification"
+                  disabled={!history.length}
+                  onClick={() => {
+                    const previous = history.at(-1);
+                    if (previous) {
+                      setSetup(previous);
+                      setHistory((items) => items.slice(0, -1));
+                    }
+                  }}
+                >
+                  <Undo2 size={17} />
+                </button>
+                <span className="toolbar-line" />
+                <button className="text-button" onClick={() => upload.current?.click()}>
+                  <ArrowUpFromLine size={15} />
+                  <span>Importer</span>
+                </button>
+                <button className="text-button" onClick={exportProject}>
+                  <ArrowDownToLine size={15} />
+                  <span>Exporter</span>
+                </button>
+                <input
+                  className="hidden"
+                  ref={upload}
+                  type="file"
+                  accept=".json,application/json"
+                  onChange={(event) => void importProject(event.target.files?.[0])}
+                />
+              </div>
+            </div>
+            {display.ports.some(
+              (port) =>
+                port.source.kind === 'demo' ||
+                Object.values(port.evidence ?? {}).some((item) => item.kind === 'demo'),
+            ) && (
+              <div className="demo-banner">
+                <Info size={13} />
+                <span>
+                  Écran de démonstration : capacités fictives. Renseignez celles de votre écran pour
+                  analyser votre matériel.
+                </span>
+              </div>
+            )}
+            <div className="studio-body">
+              <div className="canvas-wrap" ref={canvas}>
+                <div className="canvas-label">
+                  <span className="canvas-step">01</span> Installation vidéo{' '}
+                  <span className="canvas-count">2 équipements</span>
+                </div>
+                <ReactFlow
+                  onInit={setFlow}
+                  nodes={nodes}
+                  edges={
+                    connection
+                      ? [
+                          {
+                            id: connection.id,
+                            source: connection.from.deviceId,
+                            sourceHandle: connection.from.portId,
+                            target: connection.to.deviceId,
+                            targetHandle: connection.to.portId,
+                            type: 'smoothstep',
+                            label: cable.name.split(' · ')[0],
+                            animated: analysis.displayStatus === 'compatible',
+                            style: {
+                              stroke:
+                                analysis.status === 'incompatible'
+                                  ? '#d28a47'
+                                  : analysis.status === 'compatible'
+                                    ? '#5278db'
+                                    : '#9aa5bb',
+                              strokeWidth: 2.5,
+                            },
+                            labelStyle: { fill: '#56637d', fontSize: 11, fontWeight: 600 },
+                            labelBgStyle: { fill: '#fff' },
+                            labelBgPadding: [10, 6],
+                            labelBgBorderRadius: 7,
+                          },
+                        ]
+                      : []
+                  }
+                  onNodesChange={onNodesChange}
+                  onConnect={onConnect}
+                  nodeTypes={nodeTypes}
+                  onEdgeClick={() => selectDevice('cable')}
+                  fitView
+                  fitViewOptions={{ padding: 0.2, maxZoom: 1 }}
+                  minZoom={0.4}
+                  maxZoom={1.4}
+                  defaultEdgeOptions={{ interactionWidth: 28 }}
+                  proOptions={{ hideAttribution: false }}
+                  deleteKeyCode={null}
+                  nodesConnectable
+                  connectionRadius={28}
+                  aria-label="Schéma interactif de l’installation"
+                >
+                  <Background gap={20} size={1} color="#d7dce5" />
+                  <Controls showInteractive={false} position="bottom-left" />
+                </ReactFlow>
+                <div className="canvas-tip">
+                  <MousePointer2 size={14} />
+                  <span>Déplacez les appareils · Reliez les points des ports</span>
+                </div>
+                <div className="canvas-legend">
+                  <span>
+                    <i className="legend-device" />
+                    Équipement
+                  </span>
+                  <span>
+                    <i className="legend-link" />
+                    Connexion
+                  </span>
+                </div>
+              </div>
+              <aside className="inspector" aria-label="Inspection et diagnostic">
+                <div className="inspector-tabs">
+                  <button
+                    className={panel === 'diagnosis' ? 'active' : ''}
+                    onClick={() => setPanel('diagnosis')}
+                  >
+                    <Zap size={15} />
+                    Diagnostic
+                  </button>
+                  <button
+                    className={panel === 'equipment' ? 'active' : ''}
+                    onClick={() => setPanel('equipment')}
+                  >
+                    <Layers3 size={15} />
+                    Éléments
+                  </button>
+                </div>
+                {panel === 'diagnosis' ? (
+                  <div className="inspector-content">
+                    <div className="section-kicker">VOTRE OBJECTIF</div>
+                    <h2>Une image, sans surprise.</h2>
+                    <label className="field-label" htmlFor="goal-mode">
+                      Résolution & fréquence
+                    </label>
+                    <select
+                      id="goal-mode"
+                      value={setup.goal.modeId}
+                      onChange={(event) =>
+                        update((draft) => {
+                          draft.goal.modeId = event.target.value;
+                        })
+                      }
+                    >
+                      {VIDEO_MODES.map((item) => (
+                        <option value={item.id} key={item.id}>
+                          {item.width} × {item.height} · {item.refreshHz} Hz
+                        </option>
+                      ))}
+                    </select>
+                    <div className="color-row">
+                      <span>Couleurs</span>
+                      <select
+                        aria-label="Profondeur des couleurs"
+                        value={setup.goal.colorDepth}
+                        onChange={(event) =>
+                          update((draft) => {
+                            draft.goal.colorDepth = Number(event.target.value) as 8 | 10 | 12;
+                          })
+                        }
+                      >
+                        <option value="8">RGB · 8 bits</option>
+                        <option value="10">RGB · 10 bits</option>
+                        <option value="12">RGB · 12 bits</option>
+                      </select>
+                    </div>
+                    <div className={`result-card ${statusClass}`}>
+                      <div className="result-icon">
+                        {analysis.status === 'compatible' ? (
+                          <CheckCircle2 size={22} />
+                        ) : analysis.status === 'incompatible' ? (
+                          <Info size={22} />
+                        ) : (
+                          <CircleHelp size={22} />
+                        )}
+                      </div>
+                      <div>
+                        <strong>{statusText[analysis.status]}</strong>
+                        <p>
+                          {analysis.status === 'compatible'
+                            ? 'Ce mode est disponible avec les caractéristiques renseignées.'
+                            : analysis.status === 'incompatible'
+                              ? 'Un maillon de la chaîne limite ce mode.'
+                              : 'Des caractéristiques manquent pour conclure.'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="signal-row">
+                      <span>Signal vidéo possible</span>
+                      <strong className={analysis.displayStatus}>
+                        {analysis.displayStatus === 'compatible'
+                          ? 'Oui, sous hypothèses'
+                          : analysis.displayStatus === 'incompatible'
+                            ? 'Non'
+                            : 'Indéterminé'}
+                      </strong>
+                    </div>
+                    <div className="inspector-separator" />
+                    <div className="section-kicker">LA CHAÎNE EN DÉTAIL</div>
+                    <div className="chain-track">
+                      {[
+                        {
+                          label: source.name.replace('NVIDIA GeForce ', ''),
+                          icon: <Cpu size={14} />,
+                          id: 'gpu' as const,
+                        },
+                        {
+                          label:
+                            connectorName(sourcePort.connector) +
+                            ' → ' +
+                            connectorName(displayPort.connector),
+                          icon: <CableIcon size={14} />,
+                          id: 'cable' as const,
+                        },
+                        {
+                          label: display.name,
+                          icon: <Monitor size={14} />,
+                          id: 'display' as const,
+                        },
+                      ].map((item, index) => (
+                        <button key={item.id} onClick={() => selectDevice(item.id)}>
+                          <span className="chain-icon">{item.icon}</span>
+                          <span>
+                            {item.label}
+                            <small>
+                              {index === 0
+                                ? 'Source du signal'
+                                : index === 1
+                                  ? connection
+                                    ? 'Câble et ports sélectionnés'
+                                    : 'Aucun câble relié'
+                                  : 'Capacités de l’entrée choisie'}
+                            </small>
+                          </span>
+                          <ChevronRight size={14} />
+                        </button>
+                      ))}
+                    </div>
+                    <div className="section-kicker mode-heading">
+                      MODES DISPONIBLES <span>{analysis.availableModes.length}</span>
+                    </div>
+                    <div className="available-modes">
+                      {analysis.availableModes.length ? (
+                        analysis.availableModes.map((item) => (
+                          <button
+                            key={item.id}
+                            onClick={() =>
+                              update((draft) => {
+                                draft.goal.modeId = item.id;
+                              })
+                            }
+                            className={item.id === setup.goal.modeId ? 'selected' : ''}
+                          >
+                            <Check size={12} />
+                            {item.label}
+                          </button>
+                        ))
+                      ) : (
+                        <p>Aucun mode confirmé pour le moment.</p>
+                      )}
+                    </div>
+                    <p className="fine-print">
+                      Parmi les modes renseignés · RGB {setup.goal.colorDepth} bits · sans DSC
+                    </p>
+                  </div>
+                ) : (
+                  <div className="inspector-content">
+                    <div className="element-switch">
+                      {(['gpu', 'cable', 'display'] as Selection[]).map((item) => (
+                        <button
+                          className={selection === item ? 'active' : ''}
+                          key={item}
+                          onClick={() => setSelection(item)}
+                        >
+                          {item === 'gpu' ? 'Source' : item === 'display' ? 'Écran' : 'Liaison'}
+                        </button>
+                      ))}
+                    </div>
+                    {selection === 'gpu' ? (
+                      <>
+                        <div className="section-kicker">ORIGINE DU SIGNAL</div>
+                        <h2>Le bon port, la bonne source.</h2>
+                        <label className="field-label" htmlFor="origin">
+                          Emplacement de la sortie
+                        </label>
+                        <select
+                          id="origin"
+                          value={source.kind === 'gpu' ? 'gpu' : 'motherboard'}
+                          onChange={(event) => changeOrigin(event.target.value === 'motherboard')}
+                        >
+                          <option value="gpu">Carte graphique dédiée</option>
+                          <option value="motherboard">Carte mère · non documentée</option>
+                        </select>
+                        {source.kind === 'gpu' && (
+                          <>
+                            <label className="field-label" htmlFor="gpu-model">
+                              Carte graphique
+                            </label>
+                            <select
+                              id="gpu-model"
+                              value={source.name.includes('5080') ? 'rtx5080' : 'rtx4090'}
+                              onChange={(event) => setGpu(event.target.value as GpuId)}
+                            >
+                              {GPU_CATALOG.map((item) => (
+                                <option key={item.id} value={item.id}>
+                                  {item.name}
+                                </option>
+                              ))}
+                            </select>
+                          </>
+                        )}
+                        <div className="info-box">
+                          <Info size={16} />
+                          <p>
+                            {source.kind === 'gpu'
+                              ? 'Profil NVIDIA de référence. Les ports d’une carte partenaire peuvent différer.'
+                              : 'La carte graphique dédiée ne fournit pas automatiquement le signal d’une sortie de carte mère. Le processeur et le routage doivent être documentés.'}
+                          </p>
+                        </div>
+                        <div className="spec-list">
+                          {source.ports.map((port) => (
+                            <div key={port.id}>
+                              <span>{port.label}</span>
+                              <strong>{format(port.maxPayloadGbps)}</strong>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    ) : selection === 'cable' ? (
+                      <>
+                        <div className="section-kicker">LES MAILLONS COMPTENT</div>
+                        <h2>Inspecter la liaison.</h2>
+                        <label className="field-label" htmlFor="out-port">
+                          Port de sortie
+                        </label>
+                        <select
+                          id="out-port"
+                          value={sourcePort.id}
+                          onChange={(event) => {
+                            setPendingOutput(event.target.value);
+                            update((draft) => {
+                              if (draft.connections[0])
+                                draft.connections[0].from.portId = event.target.value;
+                            });
+                          }}
+                        >
+                          {source.ports.map((port) => (
+                            <option key={port.id} value={port.id}>
+                              {port.label}
+                            </option>
+                          ))}
+                        </select>
+                        <label className="field-label" htmlFor="cable-profile">
+                          Câble utilisé
+                        </label>
+                        <select
+                          id="cable-profile"
+                          value={
+                            CABLE_PROFILES.find((profile) => {
+                              const reference = createCable(profile.id);
+                              return (
+                                reference.name === cable.name &&
+                                JSON.stringify(reference.ends) === JSON.stringify(cable.ends) &&
+                                JSON.stringify(reference.protocols) ===
+                                  JSON.stringify(cable.protocols) &&
+                                reference.maxPayloadGbps === cable.maxPayloadGbps
+                              );
+                            })?.id ?? ''
+                          }
+                          onChange={(event) =>
+                            update((draft) => {
+                              draft.cables[0] = createCable(event.target.value, cable.id);
+                            })
+                          }
+                        >
+                          <option value="" disabled>
+                            Profil importé
+                          </option>
+                          {CABLE_PROFILES.map((profile) => (
+                            <option key={profile.id} value={profile.id}>
+                              {profile.name}
+                            </option>
+                          ))}
+                        </select>
+                        <label className="field-label" htmlFor="in-port">
+                          Entrée de l’écran
+                        </label>
+                        <select
+                          id="in-port"
+                          value={displayPort.id}
+                          onChange={(event) => {
+                            setPendingInput(event.target.value);
+                            update((draft) => {
+                              if (draft.connections[0])
+                                draft.connections[0].to.portId = event.target.value;
+                            });
+                          }}
+                        >
+                          {display.ports.map((port) => (
+                            <option key={port.id} value={port.id}>
+                              {port.label}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="info-box">
+                          <CableIcon size={17} />
+                          <p>
+                            Le profil d’un câble est une déclaration à vérifier sur sa fiche. Un
+                            câble de capacité inconnue ne permet pas de confirmer le mode demandé.
+                          </p>
+                        </div>
+                        <button
+                          className="button full"
+                          onClick={() =>
+                            update((draft) => {
+                              draft.connections = draft.connections.length
+                                ? []
+                                : [
+                                    {
+                                      id: 'connection-1',
+                                      from: { deviceId: source.id, portId: sourcePort.id },
+                                      to: { deviceId: display.id, portId: displayPort.id },
+                                      cableId: cable.id,
+                                    },
+                                  ];
+                            })
+                          }
+                        >
+                          <Link2 size={15} />
+                          {connection ? 'Débrancher le câble' : 'Relier les ports'}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div className="section-kicker">CAPACITÉS DE L’ÉCRAN</div>
+                        <h2>Ce que l’entrée accepte.</h2>
+                        <label className="field-label" htmlFor="screen-name">
+                          Nom de l’écran
+                        </label>
+                        <input
+                          id="screen-name"
+                          value={display.name}
+                          onChange={(event) =>
+                            update((draft) => {
+                              const item = draft.devices.find(
+                                (device) => device.id === display.id,
+                              )!;
+                              item.name = event.target.value.slice(0, 100) || 'Mon écran';
+                              item.source = userSource;
+                            })
+                          }
+                        />
+                        <p className="fine-print">
+                          La démonstration utilise un écran fictif. Remplacez ses capacités par
+                          celles de votre modèle.
+                        </p>
+                        <label className="field-label" htmlFor="screen-input">
+                          Configurer l’entrée
+                        </label>
+                        <select
+                          id="screen-input"
+                          value={displayPort.id}
+                          onChange={(event) => {
+                            setPendingInput(event.target.value);
+                            update((draft) => {
+                              if (draft.connections[0])
+                                draft.connections[0].to.portId = event.target.value;
+                            });
+                          }}
+                        >
+                          {display.ports.map((port) => (
+                            <option key={port.id} value={port.id}>
+                              {port.label}
+                            </option>
+                          ))}
+                        </select>
+                        <label className="field-label" htmlFor="screen-bandwidth">
+                          Capacité utile de l’entrée
+                        </label>
+                        <select
+                          id="screen-bandwidth"
+                          value={displayPort.maxPayloadGbps ?? 'unknown'}
+                          onChange={(event) =>
+                            patchDisplayPort({
+                              maxPayloadGbps:
+                                event.target.value === 'unknown'
+                                  ? null
+                                  : Number(event.target.value),
+                            })
+                          }
+                        >
+                          <option value="unknown">Non documentée</option>
+                          <option value="17.28">DisplayPort HBR2 · 17,28 Gbit/s</option>
+                          <option value="25.92">DisplayPort HBR3 · 25,92 Gbit/s</option>
+                          <option value="77.37">DisplayPort UHBR20 · 77,37 Gbit/s</option>
+                        </select>
+                        <label className="field-label" htmlFor="screen-protocol">
+                          Protocole vidéo de l’entrée
+                        </label>
+                        <select
+                          id="screen-protocol"
+                          value={
+                            displayPort.protocols === null
+                              ? 'unknown'
+                              : (displayPort.protocols[0] ?? 'none')
+                          }
+                          onChange={(event) =>
+                            patchDisplayPort({
+                              protocols:
+                                event.target.value === 'unknown'
+                                  ? null
+                                  : event.target.value === 'none'
+                                    ? []
+                                    : [event.target.value],
+                            })
+                          }
+                        >
+                          <option value="unknown">Non documenté</option>
+                          <option value="displayport">DisplayPort</option>
+                          <option value="hdmi">HDMI</option>
+                          <option value="none">Aucun protocole vidéo</option>
+                        </select>
+                        <label className="field-label" htmlFor="screen-depth">
+                          Profondeurs de couleur acceptées
+                        </label>
+                        <select
+                          id="screen-depth"
+                          value={displayPort.supportedColorDepths?.join(',') ?? 'unknown'}
+                          onChange={(event) =>
+                            patchDisplayPort({
+                              supportedColorDepths:
+                                event.target.value === 'unknown'
+                                  ? null
+                                  : (event.target.value.split(',').map(Number) as (8 | 10 | 12)[]),
+                            })
+                          }
+                        >
+                          <option value="unknown">Non documentées</option>
+                          <option value="8">8 bits</option>
+                          <option value="8,10">8 et 10 bits</option>
+                          <option value="8,10,12">8, 10 et 12 bits</option>
+                        </select>
+                        <label className="field-label" htmlFor="screen-dsc">
+                          Compression DSC de l’entrée
+                        </label>
+                        <select
+                          id="screen-dsc"
+                          value={String(displayPort.dsc)}
+                          onChange={(event) =>
+                            patchDisplayPort({
+                              dsc:
+                                event.target.value === 'null'
+                                  ? null
+                                  : event.target.value === 'true',
+                            })
+                          }
+                        >
+                          <option value="null">Non documentée</option>
+                          <option value="false">Non prise en charge</option>
+                          <option value="true">Prise en charge déclarée</option>
+                        </select>
+                        <p className="fine-print">
+                          La négociation DSC n’est pas simulée. Sa présence ne confirme pas un mode
+                          compressé.
+                        </p>
+                        <div className="checkbox-heading">Modes déclarés sur cette entrée</div>
+                        {VIDEO_MODES.map((item) => (
+                          <label className="checkbox-row" key={item.id}>
+                            <input
+                              type="checkbox"
+                              checked={displayPort.supportedModeIds?.includes(item.id) ?? false}
+                              onChange={(event) =>
+                                patchDisplayPort({
+                                  supportedModeIds: event.target.checked
+                                    ? [...(displayPort.supportedModeIds ?? []), item.id]
+                                    : (displayPort.supportedModeIds ?? []).filter(
+                                        (id) => id !== item.id,
+                                      ),
+                                })
+                              }
+                            />
+                            <span>{item.label}</span>
+                          </label>
+                        ))}
+                        <button
+                          className="inline-link"
+                          onClick={() =>
+                            patchDisplayPort({
+                              supportedModeIds: null,
+                              maxPayloadGbps: null,
+                              supportedColorDepths: null,
+                              protocols: null,
+                            })
+                          }
+                        >
+                          Marquer les caractéristiques inconnues
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </aside>
+            </div>
+            <footer className="studio-footer">
+              <span>
+                <span className={`save-dot ${saveState.startsWith('Échec') ? 'error' : ''}`} />
+                {saveState}
+              </span>
+              <button
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      'Remplacer le setup actuel par la démonstration ? Vous pourrez annuler cette action.',
+                    )
+                  )
+                    replace(createSetup());
+                }}
+              >
+                <RotateCcw size={13} />
+                Réinitialiser la démo
+              </button>
+            </footer>
+          </section>
+          <section className="diagnostics-section">
+            <div className="diagnostics-heading">
+              <div>
+                <span className="section-kicker">COMPRENDRE, PUIS AJUSTER</span>
+                <h2>Le diagnostic de votre installation</h2>
+              </div>
+              <span className="analysis-badge">
+                <span />
+                Analyse locale
+              </span>
+            </div>
+            <div className="diagnostic-grid">
+              <div className="diagnostic-explanations">
+                {analysis.diagnostics.length ? (
+                  analysis.diagnostics.map((diagnostic, index) => (
+                    <article
+                      className={`explanation ${diagnostic.status}`}
+                      key={`${diagnostic.code}-${index}`}
+                    >
+                      <span className="explanation-icon">
+                        {diagnostic.status === 'compatible' ? (
+                          <CheckCircle2 size={18} />
+                        ) : (
+                          <Info size={18} />
+                        )}
+                      </span>
+                      <div>
+                        <h3>{diagnostic.title}</h3>
+                        <p>{diagnostic.message}</p>
+                        {diagnostic.suggestion && (
+                          <p className="suggestion">
+                            <ArrowUpRight size={13} />
+                            {diagnostic.suggestion}
+                          </p>
+                        )}
+                      </div>
+                    </article>
+                  ))
+                ) : (
+                  <article className="explanation compatible">
+                    <CheckCircle2 size={19} />
+                    <div>
+                      <h3>Votre chaîne répond à cet objectif</h3>
+                      <p>
+                        Les caractéristiques renseignées permettent de transporter le mode demandé
+                        sans compression DSC.
+                      </p>
+                    </div>
+                  </article>
+                )}
+              </div>
+              <div className="bandwidth-card">
+                <div className="section-kicker">CAPACITÉ DE LA CHAÎNE</div>
+                <div className="bandwidth-value">
+                  {analysis.bottleneckGbps === null
+                    ? '—'
+                    : analysis.bottleneckGbps.toLocaleString('fr-FR', { maximumFractionDigits: 2 })}
+                  <span>Gbit/s utiles</span>
+                </div>
+                <div className="bandwidth-meter">
+                  <div
+                    style={{
+                      width: `${analysis.requiredGbps && analysis.bottleneckGbps ? Math.min(100, (analysis.requiredGbps / analysis.bottleneckGbps) * 100) : 0}%`,
+                    }}
+                  />
+                </div>
+                <div className="bandwidth-detail">
+                  <span>Mode demandé</span>
+                  <strong>{format(analysis.requiredGbps)}</strong>
+                </div>
+                <p>
+                  Budget limité par le maillon le moins capable. Le contrôle du débit seul ne
+                  garantit pas l’affichage.
+                </p>
+              </div>
+            </div>
+            <details className="assumptions">
+              <summary>
+                <Info size={15} />
+                Hypothèses & limites de cette analyse
+                <ChevronRight size={14} />
+              </summary>
+              <ul>
+                {analysis.assumptions.map((item, index) => (
+                  <li key={index}>{item}</li>
+                ))}
+              </ul>
+              <p>
+                Le diagnostic concerne le signal vidéo, pas les performances en jeu. Les timings de
+                démonstration sont des exemples ; un écran réel nécessite ses modes documentés. DSC
+                et les chemins complexes restent hors de cette première couverture.
+              </p>
+              <div className="assumption-controls">
+                <label>
+                  PC démarré et opérationnel
+                  <select
+                    aria-label="PC opérationnel"
+                    value={String(setup.conditions.computerOperational)}
+                    onChange={(event) =>
+                      update((draft) => {
+                        draft.conditions.computerOperational =
+                          event.target.value === 'null' ? null : event.target.value === 'true';
+                      })
+                    }
+                  >
+                    <option value="true">Supposé oui</option>
+                    <option value="false">Non</option>
+                    <option value="null">Inconnu</option>
+                  </select>
+                </label>
+                <label>
+                  Écran alimenté
+                  <select
+                    aria-label="Écran alimenté"
+                    value={String(setup.conditions.displayPowered)}
+                    onChange={(event) =>
+                      update((draft) => {
+                        draft.conditions.displayPowered =
+                          event.target.value === 'null' ? null : event.target.value === 'true';
+                      })
+                    }
+                  >
+                    <option value="true">Supposé oui</option>
+                    <option value="false">Non</option>
+                    <option value="null">Inconnu</option>
+                  </select>
+                </label>
+              </div>
+            </details>
+          </section>
+          <footer className="page-footer">
+            <span>
+              BranchLab <span className="footer-dot">·</span> Chaque connexion a une explication.
+            </span>
+            <button onClick={() => setModal('sources')}>
+              Voir les sources
+              <ArrowUpRight size={13} />
+            </button>
+          </footer>
+        </main>
+      </div>
+      {notice && (
+        <div className="toast" role="status">
+          <Info size={18} />
+          <span>{notice}</span>
+          <button
+            className="icon-button"
+            onClick={() => setNotice('')}
+            aria-label="Fermer la notification"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+      {modal && (
+        <div className="modal-backdrop" onClick={() => setModal(null)}>
+          <section
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              autoFocus
+              className="icon-button modal-close"
+              aria-label="Fermer"
+              onClick={() => setModal(null)}
+            >
+              <X size={20} />
+            </button>
+            <div className="eyebrow">BRANCHLAB</div>
+            <h2 id="modal-title">
+              {modal === 'sources'
+                ? 'Des données, pas des suppositions.'
+                : modal === 'guide'
+                  ? 'Bienvenue dans votre atelier.'
+                  : 'Les premières briques.'}
+            </h2>
+            {modal === 'sources' ? (
+              <>
+                <p>
+                  Chaque fiche indique l’origine de ses caractéristiques. Les capacités non
+                  documentées restent inconnues.
+                </p>
+                {sources.map((item, index) => (
+                  <div className="source-item" key={index}>
+                    <span className={`source-tag ${item.kind}`}>
+                      {item.kind === 'manufacturer'
+                        ? 'Constructeur'
+                        : item.kind === 'standard'
+                          ? 'Standard'
+                          : item.kind === 'user'
+                            ? 'Déclaration'
+                            : 'Démonstration'}
+                    </span>
+                    <strong>{item.label}</strong>
+                    {item.url && (
+                      <a href={item.url} target="_blank" rel="noreferrer">
+                        Consulter la source <ExternalLink size={13} />
+                      </a>
+                    )}
+                    {item.checkedAt && (
+                      <small>
+                        Vérifié le {new Date(item.checkedAt).toLocaleDateString('fr-FR')}
+                      </small>
+                    )}
+                  </div>
+                ))}
+                <p className="fine-print">
+                  Les spécifications NVIDIA concernent le design de référence. Le débit utile
+                  DisplayPort est dérivé des débits normalisés, pas une mesure de votre matériel.
+                </p>
+              </>
+            ) : modal === 'guide' ? (
+              <>
+                <p>
+                  Reproduisez une connexion et voyez comment chaque maillon influence le résultat.
+                </p>
+                <ol className="guide-list">
+                  <li>
+                    <strong>Choisissez une source.</strong> RTX 4090, RTX 5080 ou sortie de carte
+                    mère non documentée.
+                  </li>
+                  <li>
+                    <strong>Renseignez votre écran.</strong> Cliquez sur sa carte pour adapter les
+                    capacités de chaque entrée.
+                  </li>
+                  <li>
+                    <strong>Reliez les bons ports.</strong> Faites glisser un point de sortie vers
+                    un point d’entrée, puis vérifiez le câble.
+                  </li>
+                  <li>
+                    <strong>Choisissez votre objectif.</strong> Le diagnostic distingue un mode
+                    indisponible d’une absence totale de signal.
+                  </li>
+                </ol>
+                <div className="info-box">
+                  <Info size={18} />
+                  <p>
+                    Cette première version couvre une source et un écran en liaison directe. Les
+                    autres familles de votre setup seront ajoutées progressivement.
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <p>
+                  Choisissez une carte de référence pour remplacer la source actuelle. Votre écran
+                  et ses caractéristiques sont conservés.
+                </p>
+                {GPU_CATALOG.map((item) => (
+                  <button className="catalog-choice" key={item.id} onClick={() => setGpu(item.id)}>
+                    <Cpu size={27} />
+                    <span>
+                      <strong>{item.name}</strong>
+                      <small>{item.description}</small>
+                    </span>
+                    <Plus size={18} />
+                  </button>
+                ))}
+                <button
+                  className="catalog-choice"
+                  onClick={() => {
+                    selectDevice('display');
+                    setModal(null);
+                  }}
+                >
+                  <Monitor size={27} />
+                  <span>
+                    <strong>Configurer mon écran</strong>
+                    <small>Entrées, capacité et modes acceptés</small>
+                  </span>
+                  <ArrowUpRight size={18} />
+                </button>
+                <div className="info-box">
+                  <Info size={16} />
+                  <p>
+                    L’ajout de plusieurs appareils arrivera dans une prochaine tranche. Le modèle
+                    conserve des appareils, ports et connexions séparés pour cette évolution.
+                  </p>
+                </div>
+              </>
+            )}
+          </section>
+        </div>
+      )}
+      <span className="sr-only" aria-live="polite">
+        {mode?.label} : {statusText[analysis.status]}
+      </span>
+    </div>
+  );
+}
