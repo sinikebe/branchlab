@@ -59,7 +59,7 @@ Les fichiers publiés se trouvent dans `/root/.local/share/branchlab/releases/<c
 
 Le script refuse un checkout qui contient le dépôt de travail, qui y est imbriqué, ou qui chevauche le stockage des constructions. Un checkout existant doit avoir été créé par le script, identifié par un marqueur dans `.git`, et conserver le dépôt distant attendu. Il n’adopte pas automatiquement un dépôt existant : choisir un dossier absent pour la première installation.
 
-Installation sur cette machine Linux avec systemd, une fois la branche distante `dev` créée et Chromium installé via `npx playwright install --with-deps chromium` :
+Installation sur cette machine Linux avec systemd, une fois la branche distante `dev` créée, l’accès SSH configuré comme décrit ci-dessous et Chromium installé via `npx playwright install --with-deps chromium` :
 
 ```bash
 install -d -m 755 /usr/local/lib/branchlab
@@ -79,7 +79,20 @@ journalctl -u branchlab-update.service -n 60 --no-pager
 curl http://192.168.1.60:5173/version.json
 ```
 
-L’authentification Git repose sur le gestionnaire d’identifiants déjà configuré pour l’utilisateur qui lance la mise à jour. Le cache Git actuel est temporaire : après expiration ou redémarrage, il faut s’authentifier à nouveau depuis le terminal, puis relancer le service. Aucun token n’est écrit dans le dépôt ou dans les services. Pour une synchronisation permanente, configurer ultérieurement une clé de déploiement en lecture seule ou un gestionnaire d’identifiants persistant adapté à la machine.
+### Accès Git durable par SSH
+
+Deux clés de déploiement GitHub, limitées au dépôt `sinikebe/branchlab`, séparent les usages :
+
+| Usage                   | Dépôt local et adresse `origin`                                               | Clé privée sur le serveur          | Droit GitHub        |
+| ----------------------- | ----------------------------------------------------------------------------- | ---------------------------------- | ------------------- |
+| Développement           | `/root/branchlab` → `git@github-branchlab-development:sinikebe/branchlab.git` | `/root/.ssh/branchlab_development` | Lecture et écriture |
+| Mise à jour automatique | `/root/branchlab-dev` → `git@github-branchlab-deploy:sinikebe/branchlab.git`  | `/root/.ssh/branchlab_deploy`      | Lecture seule       |
+
+Le service et le script de mise à jour utilisent l’adresse SSH de déploiement via `BRANCHLAB_REPOSITORY`. Leurs accès Git ne dépendent plus du cache HTTPS ni d’un jeton temporaire. Les clés sont sans expiration programmée et restent utilisables après redémarrage du service ou de la machine, tant que les fichiers sont présents et que les clés restent autorisées dans GitHub. Elles peuvent être révoquées dans les paramètres du dépôt.
+
+Les alias de `/root/.ssh/config` ciblent `github.com` avec l’utilisateur `git`, leur fichier `IdentityFile` respectif et `HostKeyAlias github.com`. `BatchMode yes`, `IdentitiesOnly yes` et `IdentityAgent none` imposent une connexion non interactive avec la clé prévue ; `StrictHostKeyChecking yes` exige une clé d’hôte GitHub déjà vérifiée. Les clés privées restent hors du dépôt avec des permissions `600`, dans un dossier `.ssh` protégé en `700`.
+
+Sur une nouvelle machine, il faut créer ses clés, ajouter uniquement leurs parties publiques aux clés de déploiement du dépôt avec les droits correspondants, configurer ces alias et vérifier la clé d’hôte à partir des [empreintes officielles GitHub](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints). Aucun contenu de clé privée ou publique n’est à enregistrer dans le dépôt. Le script n’adopte pas un checkout de déploiement existant dont l’adresse `origin` diffère de celle attendue : une migration HTTPS → SSH doit mettre à jour cette adresse explicitement.
 
 Si l’adresse LAN change, modifier `BRANCHLAB_BIND` dans le service et redémarrer `branchlab-dev`. Les anciennes constructions sont conservées pour faciliter un retour arrière ; surveiller l’espace disque et supprimer les versions inutilisées lorsque nécessaire.
 

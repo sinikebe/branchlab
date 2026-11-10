@@ -8,6 +8,7 @@ Type=oneshot
 User=root
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
 Environment=HOME=/root
+Environment=BRANCHLAB_REPOSITORY=git@github-branchlab-deploy:sinikebe/branchlab.git
 ExecStart=/bin/bash /usr/local/lib/branchlab/update-dev.sh
 TimeoutStartSec=15min
 NoNewPrivileges=true
