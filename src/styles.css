@@ -1213,6 +1213,8 @@ h1 > span {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
   padding: 28px 0 22px;
   font-size: 9px;
   color: #a8b0c0;
@@ -1226,6 +1228,74 @@ h1 > span {
   gap: 6px;
   font-size: 9px;
   color: #96a2b8;
+}
+.footer-links {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 22px;
+}
+.app-version {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.app-version > span {
+  color: #697a96;
+  font-variant-numeric: tabular-nums;
+}
+.page-footer .app-version button {
+  color: var(--blue);
+  font-size: 11px;
+}
+.changelog-list {
+  list-style: none;
+  padding: 0;
+  margin: 24px 0 0;
+}
+.changelog-release {
+  padding: 20px 0;
+  border-top: 1px solid var(--border);
+}
+.changelog-release:last-child {
+  padding-bottom: 0;
+}
+.changelog-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.changelog-heading h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.current-release {
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: var(--blue);
+  background: #edf1ff;
+  font-size: 10px;
+  font-weight: 500;
+}
+.changelog-release time {
+  display: block;
+  margin-top: 7px;
+  color: #697a96;
+  font-size: 11px;
+}
+.changelog-release ul {
+  margin: 16px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #50617b;
+}
+.changelog-release ul li + li {
+  margin-top: 6px;
 }
 .element-switch {
   display: flex;
@@ -2048,4 +2118,45 @@ h1 > span {
 }
 .bandwidth-card {
   align-self: start;
+}
+
+.dsc-settings {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.dsc-settings > summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+}
+.dsc-settings form {
+  margin-top: 14px;
+}
+.dsc-settings input:not([type='checkbox']) {
+  width: 100%;
+}
+.dsc-context {
+  font-size: 12px;
+  font-weight: 650;
+}
+.dsc-field-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+.dsc-confirmation {
+  align-items: flex-start;
+  margin-top: 16px;
+  line-height: 1.6;
+}
+.dsc-confirmation input {
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+.dsc-settings .inline-link {
+  margin-top: 12px;
+}
+.dsc-budget-profile {
+  overflow-wrap: anywhere;
 }

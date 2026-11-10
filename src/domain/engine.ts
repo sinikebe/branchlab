@@ -1,4 +1,5 @@
 import { VIDEO_MODES } from './catalog';
+import { dscLinkPayloadGbps, dscPayloadGbps, dscProfileMatchesMode, sameDscProfile } from './dsc';
 import { SETUP_SCHEMA } from './schema';
 import type {
   Analysis,
@@ -6,6 +7,7 @@ import type {
   Connection,
   Device,
   Diagnostic,
+  DscProfile,
   Endpoint,
   InternalRoute,
   ModeResult,
@@ -113,8 +115,11 @@ function inspectPath(setup: Setup, steps: Step[], mode: VideoMode): PathResult {
         port: getPort(endpoint),
       });
   const ports = [...points.values()];
-  const required =
+  const uncompressed =
     mode.pixelClockMHz === null ? null : (mode.pixelClockMHz * 3 * setup.goal.colorDepth) / 1000;
+  let required = uncompressed;
+  let transport: ModeResult['transport'] = null;
+  let selectedDscProfile: DscProfile | null = null;
   const lowerBound = (mode.width * mode.height * mode.refreshHz * 3 * setup.goal.colorDepth) / 1e9;
   const capacities: number[] = [];
   let capacityIncomplete = false;
@@ -351,39 +356,98 @@ function inspectPath(setup: Setup, steps: Step[], mode: VideoMode): PathResult {
   }
   // A known element still bounds the path, but does not prove the unknown elements' budgets.
   const knownPayloadLimit = capacities.length ? Math.min(...capacities) : null;
-  const payload = capacityIncomplete ? null : knownPayloadLimit;
+  let payload = capacityIncomplete ? null : knownPayloadLimit;
+  if (required !== null && payload !== null && required <= payload) transport = 'uncompressed';
   if (
     knownPayloadLimit !== null &&
     ((required !== null && required > knownPayloadLimit) || lowerBound > knownPayloadLimit)
   ) {
     const hasInternalRoute = steps.some((step) => step.route);
-    const noDsc = hasInternalRoute
-      ? ports.every(({ port }) => port.dsc === false)
-      : ports.some(({ port }) => port.dsc === false);
-    if (noDsc && lowerBound > knownPayloadLimit) {
+    const noDsc =
+      setup.goal.compression === 'off' ||
+      (hasInternalRoute
+        ? ports.every(({ port }) => port.dsc === false)
+        : ports.some(({ port }) => port.dsc === false));
+    const directDp =
+      steps.length === 1 &&
+      !!steps[0].cable &&
+      ports.length === 2 &&
+      ports.every(
+        ({ port }) => port.connector === 'displayport' && port.protocols?.includes('displayport'),
+      ) &&
+      steps[0].cable.protocols?.includes('displayport');
+    const dscSupported = ports.every(({ port }) => port.dsc === true);
+    const commonProfiles =
+      !noDsc && directDp && dscSupported
+        ? (ports[0].port.dscProfiles ?? []).filter(
+            (profile) =>
+              dscProfileMatchesMode(profile, mode, setup.goal.colorDepth) &&
+              ports[1].port.dscProfiles?.some((other) => sameDscProfile(profile, other)),
+          )
+        : [];
+    const candidates = commonProfiles
+      .map((profile) => ({
+        profile,
+        required: dscPayloadGbps(mode, profile),
+        payload: Math.min(knownPayloadLimit, dscLinkPayloadGbps(profile)),
+      }))
+      // Prefer the least compression among documented configurations that fit.
+      .sort((left, right) => right.profile.bitsPerPixelX16 - left.profile.bitsPerPixelX16);
+    const accepted = candidates.find(
+      (candidate) =>
+        // Legacy aggregate capacities cannot establish the cable/port rate per lane.
+        // Applying a two-lane HBR3 cap to a four-lane HBR2 aggregate is unsafe.
+        candidate.profile.link.laneCount === 4 &&
+        candidate.required !== null &&
+        candidate.required <= candidate.payload,
+    );
+    if (accepted) {
+      selectedDscProfile = accepted.profile;
+      required = accepted.required;
+      transport = 'dsc';
+      payload = capacityIncomplete ? null : accepted.payload;
+      findings.push(
+        diagnostic(
+          'dsc-profile-supported',
+          'compatible',
+          'Profil DSC commun documenté',
+          `${mode.label}, RGB ${setup.goal.colorDepth} bits : profil DSC 1.2 à ${accepted.profile.bitsPerPixelX16 / 16} bits par pixel, ${accepted.profile.sliceCount} tranches et FEC. Budget de transport ${required!.toFixed(2)} Gbit/s, pour une limite connue de ${accepted.payload.toFixed(2)} Gbit/s. Ce calcul ne mesure pas la négociation réelle.`,
+          ports.map(({ device }) => device.id),
+        ),
+      );
+    } else if (noDsc && lowerBound > knownPayloadLimit) {
       findings.push(
         diagnostic(
           'bandwidth-limit',
           'incompatible',
           'Capacité insuffisante',
-          `Le minimum de pixels actifs exige ${lowerBound.toFixed(2)} Gbit/s, au-delà des ${knownPayloadLimit.toFixed(2)} Gbit/s d’un maillon connu, et DSC est indisponible.`,
+          `Le minimum de pixels actifs exige ${lowerBound.toFixed(2)} Gbit/s, au-delà des ${knownPayloadLimit.toFixed(2)} Gbit/s d’un maillon connu, et DSC est ${setup.goal.compression === 'off' ? 'désactivé dans ce projet' : 'indisponible'}.`,
           ports.map(({ device }) => device.id),
           'Réduire la résolution, la fréquence ou la profondeur de couleur, puis réanalyser.',
         ),
       );
     } else {
+      const unknownLaneBudget = commonProfiles.some((profile) => profile.link.laneCount !== 4);
       findings.push(
         diagnostic(
-          noDsc ? 'timing-budget' : 'dsc-required',
+          noDsc ? 'timing-budget' : unknownLaneBudget ? 'dsc-lanes-unverified' : 'dsc-required',
           'indeterminate',
-          noDsc ? 'Budget de transport à confirmer' : 'Compression ou timing à vérifier',
-          required === null
-            ? `Les seuls pixels actifs demandent déjà au moins ${lowerBound.toFixed(2)} Gbit/s pour une limite connue de ${knownPayloadLimit.toFixed(2)} Gbit/s. Les timings et la négociation DSC doivent être documentés ; le moteur ne simule pas DSC.`
-            : noDsc
-              ? `Le budget conservateur de ${required.toFixed(2)} Gbit/s dépasse ${knownPayloadLimit.toFixed(2)} Gbit/s. Le traitement exact des intervalles de suppression n’est pas simulé.`
-              : `Le budget non compressé de ${required.toFixed(2)} Gbit/s dépasse ${knownPayloadLimit.toFixed(2)} Gbit/s. Le moteur ne négocie pas DSC et ne peut pas garantir ce mode.`,
+          noDsc ? 'Budget de transport à confirmer' : 'Profil DSC à confirmer',
+          noDsc
+            ? `Le budget conservateur de ${(required ?? lowerBound).toFixed(2)} Gbit/s dépasse ${knownPayloadLimit.toFixed(2)} Gbit/s. Le traitement exact des intervalles de suppression n’est pas simulé.`
+            : !directDp
+              ? 'Le calcul DSC couvre uniquement une liaison DisplayPort directe. Le passage DSC par un intermédiaire ou un autre transport reste à documenter et à modéliser.'
+              : !dscSupported
+                ? 'La prise en charge DSC doit être explicitement renseignée aux deux extrémités avant de vérifier un profil compressé.'
+                : unknownLaneBudget
+                  ? 'Un profil DSC à une ou deux voies est renseigné, mais les débits agrégés des ports et du câble ne prouvent pas leur débit par voie. Seules les chaînes DSC à quatre voies sont actuellement validées.'
+                  : commonProfiles.length === 0
+                    ? 'DSC est pris en charge, mais aucun profil identique accepté pour ce timing et cette profondeur de couleur n’est documenté aux deux extrémités. Aucun taux de compression n’est supposé.'
+                    : required === null
+                      ? 'Un profil DSC commun est déclaré, mais l’horloge pixel du mode manque pour calculer son budget de transport.'
+                      : 'Les profils DSC communs renseignés dépassent le budget connu. Cela ne permet pas d’exclure un autre profil accepté qui n’est pas encore documenté.',
           ports.map(({ device }) => device.id),
-          'Vérifier les timings et DSC sur l’ensemble du chemin, ou sélectionner un mode inférieur.',
+          'Documenter les timings et un même profil DSC accepté aux deux extrémités, ou sélectionner un mode inférieur.',
         ),
       );
     }
@@ -394,7 +458,7 @@ function inspectPath(setup: Setup, steps: Step[], mode: VideoMode): PathResult {
         'path-supported',
         'compatible',
         'Chaîne compatible avec les données fournies',
-        `${mode.label}, RGB ${setup.goal.colorDepth} bits : budget vidéo ${required.toFixed(2)} Gbit/s pour ${payload?.toFixed(2)} Gbit/s utiles documentés.`,
+        `${mode.label}, RGB ${setup.goal.colorDepth} bits${transport === 'dsc' ? ' avec DSC' : ' non compressé'} : budget vidéo ${required.toFixed(2)} Gbit/s pour ${payload?.toFixed(2)} Gbit/s utiles documentés.`,
         [...new Set(ports.map(({ device }) => device.id))],
       ),
     );
@@ -402,7 +466,15 @@ function inspectPath(setup: Setup, steps: Step[], mode: VideoMode): PathResult {
     diagnostics: findings,
     steps,
     payload,
-    mode: { mode, status: aggregate(findings), requiredGbps: required, diagnostics: findings },
+    mode: {
+      mode,
+      status: aggregate(findings),
+      requiredGbps: required,
+      uncompressedGbps: uncompressed,
+      transport,
+      dscProfile: selectedDscProfile,
+      diagnostics: findings,
+    },
   };
 }
 
@@ -419,6 +491,9 @@ export function analyzeSetup(input: Setup): Analysis {
     assumptions: [],
     bottleneckGbps: null,
     requiredGbps: null,
+    transport: null,
+    uncompressedGbps: null,
+    dscProfile: null,
   };
   if (!parsed.success)
     return {
@@ -436,7 +511,12 @@ export function analyzeSetup(input: Setup): Analysis {
   const assumptions = [
     'Analyse du signal vidéo uniquement : ordinateur démarré, GPU initialisé et pilote opérationnel selon la déclaration ci-dessus.',
     'Écran alimenté et bonne entrée sélectionnée selon la déclaration utilisateur ; le moteur ne vérifie pas les alimentations.',
-    'RGB 4:4:4 non compressé, sans HDR, VRR, audio ni contenu protégé. Aucune mesure physique du matériel.',
+    'RGB 4:4:4, sans HDR, VRR, audio ni contenu protégé. Aucune mesure physique du matériel.',
+    setup.goal.compression === 'off'
+      ? 'DSC est désactivé dans le projet : seuls les budgets non compressés sont évalués.'
+      : 'Le transport non compressé est privilégié. DSC exige un profil identique explicitement accepté aux deux extrémités pour le timing et la profondeur demandés ; aucun taux de compression n’est supposé.',
+    'La validation DSC couvre DisplayPort direct SST 8b/10b sur quatre voies avec FEC, arrondis par tranche et marge d’horloge. Les profils à une ou deux voies sont conservés, mais leur chaîne reste indéterminée tant que les débits par voie des ports et du câble ne sont pas modélisés.',
+    'Les profils DSC déclarent aussi l’acceptation des contraintes encodeur/décodeur ; le moteur ne simule ni PPS ni négociation réelle.',
     'Les timings de démonstration sont des profils fictifs. Les modes constructeur sans horloge pixel restent incomplets ; un timing standard ne constitue pas une lecture EDID du matériel.',
     'Le budget pixel-clock inclut les intervalles de suppression de façon conservatrice ; les cas limites restent indéterminés.',
   ];
@@ -575,5 +655,8 @@ export function analyzeSetup(input: Setup): Analysis {
     assumptions,
     bottleneckGbps: selected?.payload ?? null,
     requiredGbps: selected?.mode.requiredGbps ?? null,
+    transport: selected?.mode.transport ?? null,
+    uncompressedGbps: selected?.mode.uncompressedGbps ?? null,
+    dscProfile: selected?.mode.dscProfile ?? null,
   };
 }
