@@ -9,17 +9,28 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 15
+    env:
+      # Separate from the deployment updater's browser tests on port 5175.
+      BRANCHLAB_E2E_PORT: '5177'
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version-file: .node-version
           cache: npm
       - run: npm ci
       - run: npm run check
-      - run: npx playwright install --with-deps chromium
+      # System dependencies are installed on the host, outside the unprivileged job.
+      - run: npx playwright install chromium
       - run: npm run test:e2e
       - run: npm run build
