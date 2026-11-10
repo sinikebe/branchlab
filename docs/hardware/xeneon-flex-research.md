@@ -45,7 +45,7 @@ Le réglage, le port physique et le protocole doivent donc être représentés s
 
 ## Informations insuffisantes pour prouver toute la chaîne
 
-Les sources CORSAIR consultées ne donnent pas les horloges pixel détaillées, le débit HBR négocié, le débit HDMI FRL exact, la version et les paramètres DSC, ni une matrice couleur par mode. Ces valeurs restent inconnues : elles ne doivent pas être déduites du seul numéro de version DP/HDMI.
+Le manuel et la fiche produit ne donnent pas les horloges pixel détaillées, le débit HBR négocié, les paramètres DSC ni une matrice couleur par mode. Une analyse ultérieure du [firmware officiel V110](../sources/xeneon-flex-firmware.md) apporte le timing exact 240 Hz ainsi que des capacités FRL et DSC propres aux profils HDMI. Les paramètres DSC DisplayPort et les débits réellement négociés restent inconnus ; aucun champ HDMI n’est transposé au DP et aucune capacité n’est déduite du seul numéro de version.
 
 Le minimum théorique des pixels actifs à 3440 × 1440 / 240 Hz est de 28,53 Gbit/s en RGB 8 bits et de 35,67 Gbit/s en RGB 10 bits. Ce calcul signale un dépassement d'un budget DP HBR3 de 25,92 Gbit/s ; il ne prouve ni un débit réellement négocié, ni des paramètres DSC. Compression ou autre format peuvent être nécessaires. La présence d'une RTX 5080 ne documente pas les capacités manquantes de l'entrée écran.
 

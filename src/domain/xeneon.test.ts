@@ -3,11 +3,13 @@ import {
   analyzeSetup,
   CORSAIR_XENEON_GUIDE,
   CORSAIR_XENEON_PRODUCT,
+  CORSAIR_XENEON_FIRMWARE,
   createCable,
   createDisplay,
   createXeneonSetup,
   SETUP_SCHEMA,
   VIDEO_MODES,
+  type DscProfile,
   type GpuId,
 } from './index';
 
@@ -52,7 +54,10 @@ describe('CORSAIR XENEON FLEX evidence', () => {
     for (const port of display.ports) {
       expect(port.source).toEqual(CORSAIR_XENEON_GUIDE);
       expect(port.maxPayloadGbps).toBeNull();
-      expect(port.dsc).toBeNull();
+      if (port.connector === 'hdmi') {
+        expect(port.dsc).toBe(true);
+        expect(port.evidence?.dsc).toEqual(CORSAIR_XENEON_FIRMWARE);
+      } else expect(port.dsc).toBeNull();
       expect(port.supportedColorDepths).toBeNull();
     }
   });
@@ -70,7 +75,7 @@ describe('CORSAIR XENEON FLEX evidence', () => {
     expect(result.diagnostics.map((item) => item.code)).not.toContain('mode-unsupported');
   });
 
-  it('does not invent native timings or promote generic QHD 60 Hz PIP/PBP to normal mode', () => {
+  it('uses the firmware 240 Hz timing without guessing the remaining catalogue timings', () => {
     const display = createDisplay('xeneon-flex');
     const dp = display.ports[0];
     expect(dp.supportedModeIds).toEqual(
@@ -86,8 +91,15 @@ describe('CORSAIR XENEON FLEX evidence', () => {
     expect(dp.supportedModeIds).not.toContain('1440p60');
     expect(dp.supportedModeIds).not.toContain('1440p144');
     for (const mode of VIDEO_MODES.filter((mode) => mode.id.startsWith('uwqhd'))) {
-      expect(mode.pixelClockMHz).toBeNull();
-      expect(mode.source).toEqual(CORSAIR_XENEON_GUIDE);
+      if (mode.id === 'uwqhd240') {
+        expect(mode.pixelClockMHz).toBe(1339.2);
+        expect(mode.source).toEqual(CORSAIR_XENEON_FIRMWARE);
+        // Published DisplayID totals are 3600 × 1550: 240 Hz exactly.
+        expect((mode.pixelClockMHz! * 1e6) / (3600 * 1550)).toBe(240);
+      } else {
+        expect(mode.pixelClockMHz).toBeNull();
+        expect(mode.source).toEqual(CORSAIR_XENEON_GUIDE);
+      }
     }
   });
 
@@ -101,6 +113,56 @@ describe('CORSAIR XENEON FLEX evidence', () => {
 });
 
 describe.each(gpuIds)('%s to XENEON FLEX complete chain', (gpu) => {
+  it.each([8, 10] as const)(
+    'checks the real 240 Hz timing at RGB %i bits against an explicitly supplied DSC profile',
+    (colorDepth) => {
+      const setup = createXeneonSetup(gpu);
+      setup.goal.modeId = 'uwqhd240';
+      setup.goal.colorDepth = colorDepth;
+      const input = screenInput(setup);
+      const source = {
+        kind: 'user' as const,
+        label: 'Profil fourni pour ce scénario conditionnel',
+      };
+      // These DSC parameters are scenario inputs, not claims about NVIDIA or Corsair.
+      const profile: DscProfile = {
+        modeId: 'uwqhd240',
+        colorDepth,
+        version: '1.2',
+        bitsPerPixelX16: 12 * 16,
+        sliceCount: 4,
+        sliceHeight: 8,
+        link: { encoding: '8b10b', laneCount: 4, fec: true },
+        source,
+      };
+      input.maxPayloadGbps = 25.92;
+      input.supportedColorDepths = [8, 10];
+      input.dsc = true;
+      input.dscProfiles = [profile];
+      input.evidence = {
+        ...input.evidence,
+        maxPayloadGbps: source,
+        supportedColorDepths: source,
+        dsc: source,
+      };
+      setup.devices[0].ports[0].dscProfiles = [profile];
+      const result = analyzeSetup(setup);
+      expect(result.status).toBe('compatible');
+      expect(result.transport).toBe('dsc');
+      expect(result.uncompressedGbps).toBeCloseTo(colorDepth === 8 ? 32.1408 : 40.176);
+      expect(result.requiredGbps).toBeCloseTo(16.6297624128);
+      expect(result.dscProfile?.source.kind).toBe('user');
+      expect(result.requestedMode?.source).toEqual(CORSAIR_XENEON_FIRMWARE);
+      expect(result.availableModes.map((mode) => mode.id)).toContain('uwqhd240');
+
+      setup.goal.compression = 'off';
+      expect(analyzeSetup(setup).status).toBe('incompatible');
+      setup.goal.compression = 'auto';
+      setup.devices[0].ports[0].dscProfiles = [];
+      expect(analyzeSetup(setup).status).toBe('indeterminate');
+    },
+  );
+
   it('declares the native endpoint mode but does not manufacture proof for the entire chain', () => {
     const result = analyzeSetup(createXeneonSetup(gpu));
     expect(result.status).toBe('indeterminate');
@@ -148,7 +210,7 @@ describe.each(gpuIds)('%s to XENEON FLEX complete chain', (gpu) => {
     setup.cables[0] = createCable('dp-uhbr20');
     const result = analyzeSetup(setup);
     expect(result.status).toBe('indeterminate');
-    expect(result.requiredGbps).toBeNull();
+    expect(result.requiredGbps).toBeCloseTo(32.1408);
     // Supplying a source's/cable's rate does not fill the monitor's unknown data.
     expect(result.bottleneckGbps).toBeNull();
     expect(screenInput(setup).maxPayloadGbps).toBeNull();

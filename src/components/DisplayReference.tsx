@@ -84,10 +84,12 @@ export function DisplayReference({ device, port }: { device: Device; port: Port 
         <Info size={14} />
         <p>
           Une fréquence annoncée et les couleurs de la dalle ne garantissent pas le mode RGB sur
-          toute la chaîne. Les débits, timings et paramètres DSC non documentés restent inconnus.
+          toute la chaîne. Les timings disponibles sont sourcés ; les débits et paramètres DSC
+          absents restent à vérifier.
         </p>
       </div>
-      {port.source.kind === 'user' && (
+      {(port.source.kind === 'user' ||
+        Object.values(port.evidence ?? {}).some((item) => item.kind === 'user')) && (
         <p className="override-notice">
           Cette entrée contient des déclarations utilisateur. Elles sont conservées dans l’export et
           distinguées des données constructeur.
