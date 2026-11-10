@@ -53,13 +53,11 @@ test('invalid imports keep the project and export produces a portable snapshot',
 }) => {
   await page.goto('/');
   await page.getByLabel('Nom du setup').fill('À conserver');
-  await page
-    .locator('input[type=file]')
-    .setInputFiles({
-      name: 'invalid.json',
-      mimeType: 'application/json',
-      buffer: Buffer.from('{"schemaVersion":99}'),
-    });
+  await page.locator('input[type=file]').setInputFiles({
+    name: 'invalid.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from('{"schemaVersion":99}'),
+  });
   await expect(page.getByRole('status')).toBeVisible();
   await expect(page.getByLabel('Nom du setup')).toHaveValue('À conserver');
   const downloadPromise = page.waitForEvent('download');
@@ -87,4 +85,39 @@ test('workspace fits desktop and mobile with working source dialog', async ({ pa
   await expect(page.getByRole('heading', { name: 'Votre setup, au clair.' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: '/tmp/branchlab-mobile.png', fullPage: true });
+});
+
+test('unknown screen capabilities can be completed without resetting the project', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Inspecter Écran de démonstration 4K' }).click();
+  await page.getByRole('button', { name: 'Marquer les caractéristiques inconnues' }).click();
+  await page.getByLabel('Capacité utile de l’entrée').selectOption('25.92');
+  await page.getByLabel('Protocole vidéo de l’entrée').selectOption('displayport');
+  await page.getByLabel('Profondeurs de couleur acceptées').selectOption('8');
+  await page.getByLabel('4K · 60 Hz', { exact: true }).check();
+  await page.getByRole('button', { name: 'Diagnostic', exact: true }).click();
+  await expect(page.locator('.result-card')).toHaveClass(/compatible/);
+});
+
+test('source selection survives motherboard round trip and disconnected ports can be configured', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'RTX 5080 NVIDIA' }).click();
+  await page.getByLabel('Emplacement de la sortie').selectOption('motherboard');
+  await page.getByLabel('Emplacement de la sortie').selectOption('gpu');
+  await expect(page.getByLabel('Carte graphique', { exact: true })).toHaveValue('rtx5080');
+  await page.getByRole('button', { name: 'Liaison', exact: true }).click();
+  await page.getByRole('button', { name: 'Débrancher le câble' }).click();
+  await page.getByLabel('Port de sortie').selectOption('hdmi-1');
+  await page.getByLabel('Entrée de l’écran', { exact: true }).selectOption('hdmi-in');
+  await page.getByLabel('Câble utilisé').selectOption('hdmi');
+  await page.getByRole('button', { name: 'Relier les ports' }).click();
+  await expect(page.getByLabel('Port de sortie')).toHaveValue('hdmi-1');
+  await expect(page.getByLabel('Entrée de l’écran', { exact: true })).toHaveValue('hdmi-in');
+  await page.getByRole('button', { name: 'Diagnostic', exact: true }).click();
+  await expect(page.locator('.result-card')).toHaveClass(/indeterminate/);
+  await expect(page.getByRole('heading', { name: 'Connecteurs incompatibles' })).toHaveCount(0);
 });
