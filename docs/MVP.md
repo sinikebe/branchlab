@@ -17,7 +17,7 @@ L'utilisateur doit voir si un signal vidéo est possible et quels modes document
 
 ## Limites annoncées
 
-Évaluation théorique du transport vidéo, pas détection du matériel connecté, test électrique, mesure du câble ni garantie de démarrage du PC. Alimentation, démarrage et pilotes sont des hypothèses explicites. Pas de promesse de FPS dans les jeux. Les modes vidéo non documentés, DSC non couvert, adaptateurs et protocoles futurs restent indéterminés.
+Évaluation théorique du transport vidéo, pas détection du matériel connecté, test électrique, mesure du câble ni garantie de démarrage du PC. Alimentation, démarrage et pilotes sont des hypothèses explicites. Pas de promesse de FPS dans les jeux. DSC est calculé pour un profil commun documenté sur une liaison DisplayPort directe à quatre voies, 8b/10b avec FEC. Les modes vidéo non documentés, autres transports DSC, adaptateurs et protocoles futurs restent indéterminés.
 
 ## Acceptation
 

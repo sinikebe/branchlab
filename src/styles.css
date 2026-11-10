@@ -2049,3 +2049,44 @@ h1 > span {
 .bandwidth-card {
   align-self: start;
 }
+
+.dsc-settings {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.dsc-settings > summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+}
+.dsc-settings form {
+  margin-top: 14px;
+}
+.dsc-settings input:not([type='checkbox']) {
+  width: 100%;
+}
+.dsc-context {
+  font-size: 12px;
+  font-weight: 650;
+}
+.dsc-field-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+.dsc-confirmation {
+  align-items: flex-start;
+  margin-top: 16px;
+  line-height: 1.6;
+}
+.dsc-confirmation input {
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+.dsc-settings .inline-link {
+  margin-top: 12px;
+}
+.dsc-budget-profile {
+  overflow-wrap: anywhere;
+}

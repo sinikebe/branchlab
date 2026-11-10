@@ -15,6 +15,32 @@ const source = z.object({
 });
 const nullableStrings = z.array(id).max(200).nullable();
 const payload = z.number().positive().max(100000).nullable();
+const colorDepth = z.union([z.literal(8), z.literal(10), z.literal(12)]);
+const dscProfile = z
+  .object({
+    modeId: id,
+    colorDepth,
+    version: z.literal('1.2'),
+    bitsPerPixelX16: z.number().int().min(128).max(575),
+    sliceCount: z
+      .number()
+      .int()
+      .refine(
+        (count) => [1, 2, 4, 6, 8, 10, 12, 16, 20, 24].includes(count),
+        'Nombre de tranches DSC non couvert',
+      ),
+    sliceHeight: z.number().int().positive().max(100000),
+    link: z.object({
+      encoding: z.literal('8b10b'),
+      laneCount: z.union([z.literal(1), z.literal(2), z.literal(4)]),
+      fec: z.literal(true),
+    }),
+    source,
+  })
+  .refine(
+    (profile) => profile.bitsPerPixelX16 < profile.colorDepth * 3 * 16,
+    'Le débit DSC doit être inférieur au débit RGB non compressé',
+  );
 const port = z.object({
   id,
   label: name,
@@ -23,6 +49,7 @@ const port = z.object({
   protocols: nullableStrings,
   maxPayloadGbps: payload,
   dsc: z.boolean().nullable(),
+  dscProfiles: z.array(dscProfile).max(200).nullable().optional(),
   supportedModeIds: nullableStrings,
   modeListComplete: z.boolean().optional(),
   supportedColorDepths: z
@@ -89,7 +116,8 @@ export const SETUP_SCHEMA: z.ZodType<Setup> = z
       sourceDeviceId: id,
       displayDeviceId: id,
       modeId: id,
-      colorDepth: z.union([z.literal(8), z.literal(10), z.literal(12)]),
+      colorDepth,
+      compression: z.enum(['auto', 'off']).optional(),
     }),
     conditions: z.object({
       computerOperational: z.boolean().nullable(),

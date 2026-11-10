@@ -8,15 +8,32 @@ export interface Source {
   url?: string;
   checkedAt?: string;
 }
+/** A configuration explicitly accepted for this RGB timing by the declaring port.
+ * This contract includes its encoder/decoder throughput and buffer constraints;
+ * general DSC support alone does not establish acceptance of a profile.
+ * One/two-lane profiles are preserved, but whole-chain validation currently
+ * requires four lanes: aggregate payload fields do not specify a per-lane rate.
+ */
+export interface DscProfile {
+  modeId: string;
+  colorDepth: 8 | 10 | 12;
+  version: '1.2';
+  bitsPerPixelX16: number;
+  sliceCount: number;
+  sliceHeight: number;
+  link: { encoding: '8b10b'; laneCount: 1 | 2 | 4; fec: true };
+  source: Source;
+}
 export interface Port {
   id: string;
   label: string;
   connector: string;
   role: 'source' | 'sink' | 'bidirectional';
   protocols: string[] | null;
-  /** Effective link payload, not marketing/raw line rate. Null means unknown. */
+  /** Effective aggregate link payload, not a raw or per-lane rate. Null means unknown. */
   maxPayloadGbps: number | null;
   dsc: boolean | null;
+  dscProfiles?: DscProfile[] | null;
   supportedModeIds: string[] | null;
   /** False for a curated manufacturer subset: an omitted mode is not a negative claim. */
   modeListComplete?: boolean;
@@ -57,6 +74,7 @@ export interface Cable {
   name: string;
   ends: [string, string];
   protocols: string[] | null;
+  /** Aggregate payload only; this cannot establish the capacity on fewer DP lanes. */
   maxPayloadGbps: number | null;
   direction?: 'forward' | 'bidirectional';
   source: Source;
@@ -82,6 +100,8 @@ export interface Setup {
     displayDeviceId: string;
     modeId: string;
     colorDepth: 8 | 10 | 12;
+    /** Omitted in older projects: DSC is allowed, never assumed negotiated. */
+    compression?: 'auto' | 'off';
   };
   conditions: { computerOperational: boolean | null; displayPowered: boolean | null };
 }
@@ -108,6 +128,9 @@ export interface ModeResult {
   status: Status;
   requiredGbps: number | null;
   diagnostics: Diagnostic[];
+  transport?: 'uncompressed' | 'dsc' | null;
+  uncompressedGbps?: number | null;
+  dscProfile?: DscProfile | null;
 }
 export interface Analysis {
   status: Status;
@@ -120,4 +143,7 @@ export interface Analysis {
   assumptions: string[];
   bottleneckGbps: number | null;
   requiredGbps: number | null;
+  transport?: 'uncompressed' | 'dsc' | null;
+  uncompressedGbps?: number | null;
+  dscProfile?: DscProfile | null;
 }

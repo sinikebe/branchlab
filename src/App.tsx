@@ -49,10 +49,12 @@ import {
   type Device,
   type GpuId,
   type Status,
+  type DscProfile,
 } from './domain';
 import { loadSetup, saveSetup, parseSetup, exportSetup } from './storage';
 import { validateEditorSetup } from './editor-validation';
 import { DisplayReference, PublishedModes } from './components/DisplayReference';
+import { DscSettings } from './components/DscSettings';
 
 type EquipmentData = {
   device: Device;
@@ -212,6 +214,23 @@ export function App() {
   const displayPort =
     display.ports.find((port) => port.id === (connection?.to.portId ?? pendingInput)) ??
     display.ports[0];
+  const dscProfile = displayPort.dscProfiles?.find(
+    (profile) =>
+      profile.modeId === setup.goal.modeId &&
+      profile.colorDepth === setup.goal.colorDepth &&
+      sourcePort.dscProfiles?.some(
+        (candidate) =>
+          candidate.modeId === profile.modeId &&
+          candidate.colorDepth === profile.colorDepth &&
+          candidate.version === profile.version &&
+          candidate.bitsPerPixelX16 === profile.bitsPerPixelX16 &&
+          candidate.sliceCount === profile.sliceCount &&
+          candidate.sliceHeight === profile.sliceHeight &&
+          candidate.link.encoding === profile.link.encoding &&
+          candidate.link.laneCount === profile.link.laneCount &&
+          candidate.link.fec === profile.link.fec,
+      ),
+  );
 
   useEffect(() => {
     let active = true;
@@ -488,6 +507,7 @@ export function App() {
           'protocols',
           'maxPayloadGbps',
           'dsc',
+          'dscProfiles',
           'supportedModeIds',
           'supportedColorDepths',
           'modeListComplete',
@@ -500,13 +520,63 @@ export function App() {
         ...Object.fromEntries(Object.keys(patch).map((key) => [key, userSource])),
       };
     });
+  const saveDscProfile = (profile: DscProfile) => {
+    update((draft) => {
+      for (const [deviceId, portId] of [
+        [source.id, sourcePort.id],
+        [display.id, displayPort.id],
+      ]) {
+        const port = draft.devices
+          .find((item) => item.id === deviceId)!
+          .ports.find((item) => item.id === portId)!;
+        const dscSource = port.dsc === true ? (port.evidence?.dsc ?? port.source) : profile.source;
+        port.dsc = true;
+        port.dscProfiles = [
+          ...(port.dscProfiles ?? []).filter(
+            (item) =>
+              item.source.kind !== 'user' ||
+              item.modeId !== profile.modeId ||
+              item.colorDepth !== profile.colorDepth,
+          ),
+          structuredClone(profile),
+        ];
+        port.evidence = { ...port.evidence, dsc: dscSource, dscProfiles: profile.source };
+      }
+    });
+    setNotice('Profil DSC enregistré comme déclaration utilisateur pour les deux ports.');
+  };
+  const removeDscProfile = () => {
+    update((draft) => {
+      for (const [deviceId, portId] of [
+        [source.id, sourcePort.id],
+        [display.id, displayPort.id],
+      ]) {
+        const port = draft.devices
+          .find((item) => item.id === deviceId)!
+          .ports.find((item) => item.id === portId)!;
+        port.dscProfiles = (port.dscProfiles ?? []).filter(
+          (item) =>
+            item.source.kind !== 'user' ||
+            item.modeId !== setup.goal.modeId ||
+            item.colorDepth !== setup.goal.colorDepth,
+        );
+      }
+    });
+    setNotice(
+      'Profil DSC retiré pour cet objectif. La capacité générale DSC des ports est conservée.',
+    );
+  };
   const sources = [
     ...new Map(
       setup.devices
         .flatMap((device) => [
           device.source,
           ...(device.display ? [device.display.source] : []),
-          ...device.ports.flatMap((port) => [port.source, ...Object.values(port.evidence ?? {})]),
+          ...device.ports.flatMap((port) => [
+            port.source,
+            ...Object.values(port.evidence ?? {}),
+            ...(port.dscProfiles ?? []).map((profile) => profile.source),
+          ]),
         ])
         .concat(setup.cables.map((item) => item.source))
         .concat(analysis.requestedMode ? [analysis.requestedMode.source] : [])
@@ -816,6 +886,24 @@ export function App() {
                         <option value="12">RGB · 12 bits</option>
                       </select>
                     </div>
+                    <label className="field-label" htmlFor="goal-compression">
+                      Compression DSC
+                    </label>
+                    <select
+                      id="goal-compression"
+                      value={setup.goal.compression ?? 'auto'}
+                      onChange={(event) =>
+                        update((draft) => {
+                          draft.goal.compression = event.target.value as 'auto' | 'off';
+                        })
+                      }
+                    >
+                      <option value="auto">Autoriser si nécessaire</option>
+                      <option value="off">Désactiver pour cette analyse</option>
+                    </select>
+                    <p className="fine-print">
+                      La simulation utilise DSC seulement avec un profil accepté par les deux ports.
+                    </p>
                     <div className={`result-card ${statusClass}`}>
                       <div className="result-icon">
                         {analysis.status === 'compatible' ? (
@@ -922,8 +1010,27 @@ export function App() {
                       )}
                     </div>
                     <p className="fine-print">
-                      Parmi les modes renseignés · RGB {setup.goal.colorDepth} bits · sans DSC
+                      Parmi les modes renseignés · RGB {setup.goal.colorDepth} bits ·{' '}
+                      {setup.goal.compression === 'off'
+                        ? 'DSC désactivé'
+                        : 'DSC autorisé si documenté'}
                     </p>
+                    {mode && (
+                      <DscSettings
+                        key={`${source.name}:${sourcePort.id}:${display.id}:${displayPort.id}:${mode.id}:${setup.goal.colorDepth}:${JSON.stringify(dscProfile)}`}
+                        mode={mode}
+                        colorDepth={setup.goal.colorDepth}
+                        available={
+                          Boolean(connection) &&
+                          source.kind === 'gpu' &&
+                          sourcePort.connector === 'displayport' &&
+                          displayPort.connector === 'displayport'
+                        }
+                        current={dscProfile}
+                        onSave={saveDscProfile}
+                        onRemove={removeDscProfile}
+                      />
+                    )}
                   </div>
                 ) : (
                   <div className="inspector-content">
@@ -1242,8 +1349,8 @@ export function App() {
                           <option value="true">Prise en charge déclarée</option>
                         </select>
                         <p className="fine-print">
-                          La négociation DSC n’est pas simulée. Sa présence ne confirme pas un mode
-                          compressé.
+                          La présence de DSC ne suffit pas. Un profil commun se renseigne dans les
+                          paramètres DSC avancés du Diagnostic.
                         </p>
                         <label className="checkbox-row">
                           <input
@@ -1289,6 +1396,8 @@ export function App() {
                               maxPayloadGbps: null,
                               supportedColorDepths: null,
                               protocols: null,
+                              dsc: null,
+                              dscProfiles: null,
                             })
                           }
                         >
@@ -1365,7 +1474,9 @@ export function App() {
                       <h3>Votre chaîne répond à cet objectif</h3>
                       <p>
                         Les caractéristiques renseignées permettent de transporter le mode demandé
-                        sans compression DSC.
+                        {analysis.transport === 'dsc'
+                          ? ' avec le profil DSC renseigné.'
+                          : ' sans compression DSC.'}
                       </p>
                     </div>
                   </article>
@@ -1387,9 +1498,33 @@ export function App() {
                   />
                 </div>
                 <div className="bandwidth-detail">
-                  <span>Mode demandé</span>
+                  <span>
+                    {analysis.transport === 'dsc'
+                      ? 'Avec DSC, FEC et marge'
+                      : 'Budget non compressé'}
+                  </span>
                   <strong>{format(analysis.requiredGbps)}</strong>
                 </div>
+                {analysis.transport === 'dsc' && (
+                  <>
+                    <div className="bandwidth-detail">
+                      <span>Sans compression</span>
+                      <strong>{format(analysis.uncompressedGbps ?? null)}</strong>
+                    </div>
+                    {analysis.dscProfile && (
+                      <p className="dsc-budget-profile">
+                        Profil DSC 1.2 · {analysis.dscProfile.bitsPerPixelX16 / 16} bpp ·{' '}
+                        {analysis.dscProfile.sliceCount} tranches ·{' '}
+                        {analysis.dscProfile.link.laneCount} voies DP.
+                        <br />
+                        {analysis.dscProfile.source.kind === 'user'
+                          ? 'Déclaration utilisateur : '
+                          : 'Référence : '}
+                        {analysis.dscProfile.source.label}
+                      </p>
+                    )}
+                  </>
+                )}
                 <p>
                   {analysis.bottleneckGbps === null
                     ? 'Le débit d’au moins un maillon n’est pas documenté. La capacité de toute la chaîne reste à confirmer.'
@@ -1410,9 +1545,10 @@ export function App() {
               </ul>
               <p>
                 Le diagnostic concerne le signal vidéo, pas les performances en jeu. Les timings de
-                démonstration sont des exemples. Pour le XENEON FLEX, les modes publiés sont
-                sourcés, mais les timings exacts non publiés restent inconnus. DSC et les chemins
-                complexes restent hors de cette couverture.
+                démonstration sont des exemples. Pour le XENEON FLEX, les modes publiés sont sourcés
+                et les timings retrouvés dans le firmware sont identifiés. DSC est calculé sur une
+                liaison DisplayPort directe, avec un profil accepté par les deux ports. Les
+                paramètres absents et les chemins complexes restent à vérifier.
               </p>
               <div className="assumption-controls">
                 <label>

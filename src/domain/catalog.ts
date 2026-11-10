@@ -39,6 +39,18 @@ export const CORSAIR_XENEON_PRODUCT: Source = {
   checkedAt,
   url: 'https://www.corsair.com/us/en/p/monitors/cm-9030001-na/corsair-xeneon-flex-45wqhd240-45-inch-oled-3440-x1440-240hz-refresh-rate-bendable-gaming-monitor-cm-9030001-na',
 };
+export const CORSAIR_XENEON_FIRMWARE: Source = {
+  kind: 'manufacturer',
+  label: 'CORSAIR — firmware FLEX V110, EDID HDMI/DP : 3440 × 1440 à 240 Hz, 1339,20 MHz',
+  checkedAt,
+  url: 'https://downloads.corsair.com/Files/Monitors/XENEON_FLEX%2045WQHD240_Firmware_V110_20231205.zip',
+};
+export const NVIDIA_XENEON_CERTIFICATION: Source = {
+  kind: 'manufacturer',
+  label: 'NVIDIA — XENEON 45WQHD240, G-SYNC Compatible, DisplayPort, 3440 × 1440, 40–240 Hz',
+  checkedAt,
+  url: 'https://www.nvidia.com/en-us/geforce/products/g-sync-monitors/specs/',
+};
 export const CTA_TIMING_SOURCE: Source = {
   kind: 'standard',
   label: 'Linux DRM — table CTA-861, VIC 16 : 1920 × 1080 à 60 Hz, horloge 148,5 MHz',
@@ -110,7 +122,8 @@ export const VIDEO_MODES: VideoMode[] = [
     source: DEMO_SOURCE,
   },
 ];
-// Resolution/refresh is documented by CORSAIR; exact pixel clocks are not published.
+// The 240 Hz timing is present in both HDMI and DP EDIDs in Corsair firmware V110.
+// Other native clocks remain outside this curated catalogue. See docs/sources/.
 VIDEO_MODES.push(
   ...[50, 60, 100, 240].map((refreshHz): VideoMode => ({
     id: `uwqhd${refreshHz}`,
@@ -118,8 +131,8 @@ VIDEO_MODES.push(
     width: 3440,
     height: 1440,
     refreshHz,
-    pixelClockMHz: null,
-    source: CORSAIR_XENEON_GUIDE,
+    pixelClockMHz: refreshHz === 240 ? 1339.2 : null,
+    source: refreshHz === 240 ? CORSAIR_XENEON_FIRMWARE : CORSAIR_XENEON_GUIDE,
   })),
   ...[120, 240].map((refreshHz): VideoMode => ({
     id: `1440p${refreshHz}`,
@@ -370,16 +383,24 @@ export function createDisplay(id: DisplayId, deviceId = 'display-1'): Device {
         'Le 4K est un signal accepté par HDMI, pas la résolution physique de la dalle.',
         'USB-C vidéo : quatre lignes jusqu’à 3440 × 1440 à 240 Hz ; deux lignes jusqu’à 60 Hz. Le réglage OSD n’est pas encore simulé.',
         'USB-C vidéo : Power Delivery 30 W annoncé ; USB-C du hub : données 5 Gbit/s et Power Delivery 15 W maximum, sans vidéo documentée. Ces capacités ne constituent pas un bilan d’alimentation.',
-        'Les débits de liaison, les horloges natives et la négociation DSC ne sont pas publiés dans les sources retenues.',
+        'Le firmware officiel V110 contient un timing 3440 × 1440 à 240 Hz de 1339,20 MHz dans ses profils HDMI et DisplayPort. Ce fichier ne constitue pas une lecture de votre écran.',
+        'NVIDIA référence le 45WQHD240 en G-SYNC Compatible, 3440 × 1440, 40–240 Hz par DisplayPort. Cette certification ne fournit pas les paramètres DSC négociés.',
+        'Les débits utiles réellement négociés et les profils DSC DisplayPort acceptés restent à documenter. Les capacités DSC du profil HDMI ne sont pas transposées au DisplayPort.',
         'Les 10 bits RGB décrivent la dalle ; la profondeur acceptée par chaque entrée et pour chaque mode reste à documenter.',
       ],
       source: guide,
     },
     routes: [],
     ports: [
-      videoPort('dp-in', 'DisplayPort · 1.4', 'displayport', commonModes),
-      videoPort('hdmi-in', 'HDMI 1 · 2.1', 'hdmi', [...commonModes, '4k60', '4k120']),
-      videoPort('hdmi-2-in', 'HDMI 2 · 2.1', 'hdmi', [...commonModes, '4k60', '4k120']),
+      {
+        ...videoPort('dp-in', 'DisplayPort · 1.4', 'displayport', commonModes),
+        evidence: { modeCertification: NVIDIA_XENEON_CERTIFICATION },
+      },
+      ...['hdmi-in', 'hdmi-2-in'].map((id, index) => ({
+        ...videoPort(id, `HDMI ${index + 1} · 2.1`, 'hdmi', [...commonModes, '4k60', '4k120']),
+        dsc: true,
+        evidence: { dsc: CORSAIR_XENEON_FIRMWARE },
+      })),
       videoPort('usb-c-video', 'USB-C · DP Alt Mode', 'usb-c', commonModes),
       basePort('usb-c-upstream', 'USB-C · hub, sans vidéo', 'usb-c', ['usb']),
       ...[1, 2, 3, 4].map((number) =>
