@@ -9,8 +9,8 @@
   "scripts": {
     "dev": "vite --host 192.168.1.60 --port 5174 --strictPort",
     "build": "tsc -b && vite build",
-    "hosting:check": "wrangler deploy --dry-run",
-    "hosting:deploy": "wrangler deploy",
+    "hosting:check": "node --test scripts/ensure-workers-subdomain.test.js && wrangler deploy --dry-run",
+    "hosting:deploy": "node scripts/ensure-workers-subdomain.js && wrangler deploy",
     "preview": "vite preview --host 192.168.1.60 --port 5174 --strictPort",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
