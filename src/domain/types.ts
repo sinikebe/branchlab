@@ -1,6 +1,7 @@
 /** Browser-independent hardware graph. Connector/protocol ids remain open strings. */
 export type Status = 'compatible' | 'incompatible' | 'indeterminate';
 export type GpuId = 'rtx4090' | 'rtx5080';
+export type DisplayId = 'demo' | 'xeneon-flex';
 export interface Source {
   kind: 'manufacturer' | 'standard' | 'user' | 'demo';
   label: string;
@@ -17,6 +18,8 @@ export interface Port {
   maxPayloadGbps: number | null;
   dsc: boolean | null;
   supportedModeIds: string[] | null;
+  /** False for a curated manufacturer subset: an omitted mode is not a negative claim. */
+  modeListComplete?: boolean;
   supportedColorDepths?: (8 | 10 | 12)[] | null;
   source: Source;
   /** Overrides source for individual characteristics derived from another reference. */
@@ -36,6 +39,18 @@ export interface Device {
   ports: Port[];
   routes: InternalRoute[];
   source: Source;
+  catalogId?: string;
+  display?: {
+    diagonalInches: number;
+    panelTechnology: string;
+    nativeWidth: number;
+    nativeHeight: number;
+    maxRefreshHz: number;
+    /** Panel specification, not a per-input/depth/mode negotiation guarantee. */
+    colorDepthBits?: number;
+    notes: string[];
+    source: Source;
+  };
 }
 export interface Cable {
   id: string;
@@ -77,7 +92,7 @@ export interface VideoMode {
   height: number;
   refreshHz: number;
   /** Includes timing blanking. A synthetic timing is explicitly identified. */
-  pixelClockMHz: number;
+  pixelClockMHz: number | null;
   source: Source;
 }
 export interface Diagnostic {
@@ -91,7 +106,7 @@ export interface Diagnostic {
 export interface ModeResult {
   mode: VideoMode;
   status: Status;
-  requiredGbps: number;
+  requiredGbps: number | null;
   diagnostics: Diagnostic[];
 }
 export interface Analysis {

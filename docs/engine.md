@@ -29,3 +29,9 @@ Caractéristiques NVIDIA et références vérifiées le 10 novembre 2026. Les pr
 Ajouter des appareils et connecteurs ne demande pas de changer la forme du graphe. Une nouvelle famille requiert néanmoins ses règles : conversions, alimentation, capacités par mode, systèmes et firmware, allocation de ressources internes et budgets simultanés. Les futurs changements s’accompagnent d’une évolution du schéma et de migrations. Ajouter une règle ne doit pas faire passer des caractéristiques manquantes à zéro ou à faux.
 
 Les tests couvrent une installation valide, un connecteur incompatible, un protocole incompatible, une limite de capacité, des données inconnues, la sortie de carte mère, DSC, les timings limites, la profondeur de couleur, la capacité d’un intermédiaire, les références cassées et la stabilité JSON.
+
+## Premier écran réel
+
+Le profil CORSAIR XENEON FLEX conserve les capacités publiées et leurs sources par entrée. Les horloges non publiées sont `null`, tout comme les débits et paramètres de négociation inconnus. Une liste de modes `modeListComplete: false` est partielle : une omission produit un résultat indéterminé, sans être assimilée à un refus du constructeur. Le mode déclaré par l’écran et la validation de la chaîne complète sont deux conclusions séparées. La capacité totale du chemin reste inconnue si un maillon n’est pas documenté, même si un autre maillon connu peut suffire à établir une limite.
+
+Voir [la fiche sourcée et les scénarios](hardware/corsair-xeneon-flex.md).

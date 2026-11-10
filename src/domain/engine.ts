@@ -113,9 +113,22 @@ function inspectPath(setup: Setup, steps: Step[], mode: VideoMode): PathResult {
         port: getPort(endpoint),
       });
   const ports = [...points.values()];
-  const required = (mode.pixelClockMHz * 3 * setup.goal.colorDepth) / 1000;
+  const required =
+    mode.pixelClockMHz === null ? null : (mode.pixelClockMHz * 3 * setup.goal.colorDepth) / 1000;
   const lowerBound = (mode.width * mode.height * mode.refreshHz * 3 * setup.goal.colorDepth) / 1e9;
   const capacities: number[] = [];
+  let capacityIncomplete = false;
+  if (mode.pixelClockMHz === null)
+    findings.push(
+      diagnostic(
+        'timing-unknown',
+        'indeterminate',
+        'Timing détaillé non documenté',
+        `${mode.label} est identifié par sa résolution et sa fréquence, mais son horloge pixel n’est pas publiée dans les sources retenues. Le budget vidéo exact reste inconnu.`,
+        [],
+        'Obtenir les timings EDID ou une fiche technique détaillée pour ce mode.',
+      ),
+    );
 
   for (const [condition, label] of [
     ['computerOperational', 'Ordinateur opérationnel'],
@@ -227,6 +240,7 @@ function inspectPath(setup: Setup, steps: Step[], mode: VideoMode): PathResult {
             ),
           );
       }
+      if (cable.maxPayloadGbps === null) capacityIncomplete = true;
       if (cable.maxPayloadGbps === null)
         findings.push(
           diagnostic(
@@ -252,6 +266,7 @@ function inspectPath(setup: Setup, steps: Step[], mode: VideoMode): PathResult {
             [step.from.deviceId],
           ),
         );
+      if (step.route.maxPayloadGbps === null) capacityIncomplete = true;
       if (step.route.maxPayloadGbps === null)
         findings.push(
           diagnostic(
@@ -267,6 +282,7 @@ function inspectPath(setup: Setup, steps: Step[], mode: VideoMode): PathResult {
   }
 
   for (const { device, port } of ports) {
+    if (port.maxPayloadGbps === null) capacityIncomplete = true;
     if (port.maxPayloadGbps === null)
       findings.push(
         diagnostic(
@@ -298,18 +314,29 @@ function inspectPath(setup: Setup, steps: Step[], mode: VideoMode): PathResult {
           [device.id],
         ),
       );
-    if (port.supportedModeIds !== null && !port.supportedModeIds.includes(mode.id))
+    if (port.supportedModeIds?.includes(mode.id) && device.kind === 'display') {
       findings.push(
         diagnostic(
-          'mode-unsupported',
-          'incompatible',
-          'Mode non pris en charge',
-          `${device.name} — ${port.label} : ${mode.label} n’appartient pas aux modes déclarés.`,
+          'mode-declared',
+          'compatible',
+          'Mode déclaré pour cette entrée',
+          `${device.name} — ${port.label} : ${mode.label} figure dans les modes renseignés pour cette entrée. Cette information ne confirme pas à elle seule le fonctionnement de toute la chaîne.`,
           [device.id],
-          'Choisir un mode déclaré pour cette entrée.',
         ),
       );
-    else if (device.kind !== 'gpu' && port.supportedModeIds === null)
+    } else if (port.supportedModeIds !== null && !port.supportedModeIds.includes(mode.id)) {
+      const incomplete = port.modeListComplete === false;
+      findings.push(
+        diagnostic(
+          incomplete ? 'mode-not-documented' : 'mode-unsupported',
+          incomplete ? 'indeterminate' : 'incompatible',
+          incomplete ? 'Mode non documenté pour cette entrée' : 'Mode non pris en charge',
+          `${device.name} — ${port.label} : ${mode.label} n’appartient pas aux modes renseignés.${incomplete ? ' La liste est partielle : cette absence ne prouve pas une incompatibilité.' : ''}`,
+          [device.id],
+          'Consulter la table des modes de cette entrée, ou sélectionner un mode documenté.',
+        ),
+      );
+    } else if (device.kind !== 'gpu' && port.supportedModeIds === null) {
       findings.push(
         diagnostic(
           'mode-unknown',
@@ -320,41 +347,48 @@ function inspectPath(setup: Setup, steps: Step[], mode: VideoMode): PathResult {
           'Renseigner les modes vidéo de cette entrée.',
         ),
       );
+    }
   }
-  const payload = capacities.length ? Math.min(...capacities) : null;
-  if (payload !== null && required > payload) {
+  // A known element still bounds the path, but does not prove the unknown elements' budgets.
+  const knownPayloadLimit = capacities.length ? Math.min(...capacities) : null;
+  const payload = capacityIncomplete ? null : knownPayloadLimit;
+  if (
+    knownPayloadLimit !== null &&
+    ((required !== null && required > knownPayloadLimit) || lowerBound > knownPayloadLimit)
+  ) {
     const hasInternalRoute = steps.some((step) => step.route);
-    // A converter may decode/re-encode DSC between segments; no end-to-end inference in that case.
     const noDsc = hasInternalRoute
       ? ports.every(({ port }) => port.dsc === false)
       : ports.some(({ port }) => port.dsc === false);
-    // Active pixels give a strict lower bound. The pixel-clock budget is conservative for DP blanking.
-    if (noDsc && lowerBound > payload)
+    if (noDsc && lowerBound > knownPayloadLimit) {
       findings.push(
         diagnostic(
           'bandwidth-limit',
           'incompatible',
           'Capacité insuffisante',
-          `Le minimum de pixels actifs exige ${lowerBound.toFixed(2)} Gbit/s, au-delà des ${payload.toFixed(2)} Gbit/s de la chaîne, et DSC est indisponible.`,
+          `Le minimum de pixels actifs exige ${lowerBound.toFixed(2)} Gbit/s, au-delà des ${knownPayloadLimit.toFixed(2)} Gbit/s d’un maillon connu, et DSC est indisponible.`,
           ports.map(({ device }) => device.id),
           'Réduire la résolution, la fréquence ou la profondeur de couleur, puis réanalyser.',
         ),
       );
-    else
+    } else {
       findings.push(
         diagnostic(
           noDsc ? 'timing-budget' : 'dsc-required',
           'indeterminate',
           noDsc ? 'Budget de transport à confirmer' : 'Compression ou timing à vérifier',
-          noDsc
-            ? `Le budget conservateur de ${required.toFixed(2)} Gbit/s dépasse ${payload.toFixed(2)} Gbit/s. Le traitement exact des intervalles de suppression n’est pas simulé.`
-            : `Le budget non compressé de ${required.toFixed(2)} Gbit/s dépasse ${payload.toFixed(2)} Gbit/s. Le moteur ne négocie pas DSC et ne peut pas garantir ce mode.`,
+          required === null
+            ? `Les seuls pixels actifs demandent déjà au moins ${lowerBound.toFixed(2)} Gbit/s pour une limite connue de ${knownPayloadLimit.toFixed(2)} Gbit/s. Les timings et la négociation DSC doivent être documentés ; le moteur ne simule pas DSC.`
+            : noDsc
+              ? `Le budget conservateur de ${required.toFixed(2)} Gbit/s dépasse ${knownPayloadLimit.toFixed(2)} Gbit/s. Le traitement exact des intervalles de suppression n’est pas simulé.`
+              : `Le budget non compressé de ${required.toFixed(2)} Gbit/s dépasse ${knownPayloadLimit.toFixed(2)} Gbit/s. Le moteur ne négocie pas DSC et ne peut pas garantir ce mode.`,
           ports.map(({ device }) => device.id),
           'Vérifier les timings et DSC sur l’ensemble du chemin, ou sélectionner un mode inférieur.',
         ),
       );
+    }
   }
-  if (!findings.length)
+  if (aggregate(findings) === 'compatible' && required !== null)
     findings.push(
       diagnostic(
         'path-supported',
@@ -403,7 +437,7 @@ export function analyzeSetup(input: Setup): Analysis {
     'Analyse du signal vidéo uniquement : ordinateur démarré, GPU initialisé et pilote opérationnel selon la déclaration ci-dessus.',
     'Écran alimenté et bonne entrée sélectionnée selon la déclaration utilisateur ; le moteur ne vérifie pas les alimentations.',
     'RGB 4:4:4 non compressé, sans HDR, VRR, audio ni contenu protégé. Aucune mesure physique du matériel.',
-    'Les timings de démonstration sont des profils fictifs ; la source doit accepter leur programmation et l’écran doit les annoncer.',
+    'Les timings de démonstration sont des profils fictifs. Les modes constructeur sans horloge pixel restent incomplets ; un timing standard ne constitue pas une lecture EDID du matériel.',
     'Le budget pixel-clock inclut les intervalles de suppression de façon conservatrice ; les cas limites restent indéterminés.',
   ];
   const requestedMode = VIDEO_MODES.find((mode) => mode.id === setup.goal.modeId) ?? null;

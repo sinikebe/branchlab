@@ -39,6 +39,8 @@ import {
   analyzeSetup,
   createSetup,
   createGpu,
+  createDisplay,
+  DISPLAY_CATALOG,
   createCable,
   CABLE_PROFILES,
   GPU_CATALOG,
@@ -50,8 +52,14 @@ import {
 } from './domain';
 import { loadSetup, saveSetup, parseSetup, exportSetup } from './storage';
 import { validateEditorSetup } from './editor-validation';
+import { DisplayReference, PublishedModes } from './components/DisplayReference';
 
-type EquipmentData = { device: Device; selected: boolean; onSelect: () => void };
+type EquipmentData = {
+  device: Device;
+  selected: boolean;
+  activePortId?: string;
+  onSelect: () => void;
+};
 type EquipmentNode = Node<EquipmentData, 'equipment'>;
 type Selection = 'gpu' | 'display' | 'cable';
 const statusText: Record<Status, string> = {
@@ -64,7 +72,7 @@ const format = (value: number | null) =>
     ? 'Non documenté'
     : `${value.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} Gbit/s`;
 const connectorName = (id: string) =>
-  id === 'displayport' ? 'DisplayPort' : id === 'hdmi' ? 'HDMI' : id;
+  id === 'displayport' ? 'DisplayPort' : id === 'hdmi' ? 'HDMI' : id === 'usb-c' ? 'USB-C' : id;
 const userSource = { kind: 'user' as const, label: 'Caractéristique déclarée par l’utilisateur' };
 
 function HardwareArt({ display = false }: { display?: boolean }) {
@@ -107,6 +115,13 @@ function HardwareArt({ display = false }: { display?: boolean }) {
 
 function Equipment({ data }: NodeProps<EquipmentNode>) {
   const display = data.device.kind === 'display';
+  const visiblePorts = display
+    ? data.device.ports.filter(
+        (port) =>
+          (['displayport', 'hdmi', 'usb-c'].includes(port.connector) && port.role !== 'source') ||
+          port.id === data.activePortId,
+      )
+    : data.device.ports;
   return (
     <article className={`equipment-node ${data.selected ? 'chosen' : ''}`}>
       <button
@@ -126,13 +141,15 @@ function Equipment({ data }: NodeProps<EquipmentNode>) {
         <p>
           {data.device.source.kind === 'demo'
             ? 'Profil de démonstration · personnalisable'
-            : data.device.kind === 'gpu'
-              ? 'NVIDIA · design de référence'
-              : 'Capacités à renseigner'}
+            : data.device.display
+              ? `${data.device.display.diagonalInches}″ ${data.device.display.panelTechnology} · ${data.device.display.nativeWidth} × ${data.device.display.nativeHeight}`
+              : data.device.kind === 'gpu'
+                ? 'NVIDIA · design de référence'
+                : 'Capacités à renseigner'}
         </p>
       </button>
       <div className="node-ports">
-        {data.device.ports.map((port) => (
+        {visiblePorts.map((port) => (
           <div className={`port-row ${display ? 'incoming' : ''}`} key={port.id}>
             {display && (
               <Handle
@@ -156,6 +173,12 @@ function Equipment({ data }: NodeProps<EquipmentNode>) {
           </div>
         ))}
       </div>
+      {data.device.ports.length > visiblePorts.length && (
+        <button className="node-extra-ports nodrag" onClick={data.onSelect}>
+          Voir les {data.device.ports.length - visiblePorts.length} autres prises{' '}
+          <ChevronRight size={12} />
+        </button>
+      )}
     </article>
   );
 }
@@ -293,35 +316,83 @@ export function App() {
         },
         data: {
           device,
+          activePortId: index === 0 ? connection?.from.portId : connection?.to.portId,
           selected: panel === 'equipment' && selection === (index === 0 ? 'gpu' : 'display'),
           onSelect: () => selectDevice(index === 0 ? 'gpu' : 'display'),
         },
       })),
     );
-  }, [source, display, selection, panel, selectDevice, setNodes]);
+  }, [source, display, selection, panel, selectDevice, setNodes, connection]);
 
   useEffect(() => {
     if (!flow || !canvas.current) return;
-    const observer = new ResizeObserver(() => {
-      requestAnimationFrame(() => {
+    let timer: number | undefined;
+    let previousWidth = -1;
+    let previousHeight = -1;
+    const observer = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      if (
+        width < 1 ||
+        height < 1 ||
+        (Math.abs(width - previousWidth) < 1 && Math.abs(height - previousHeight) < 1)
+      )
+        return;
+      previousWidth = width;
+      previousHeight = height;
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
         void flow.fitView({ padding: 0.2, maxZoom: 1 });
-      });
+      }, 100);
     });
     observer.observe(canvas.current);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(timer);
+    };
   }, [flow, source.id]);
 
   const setGpu = (id: GpuId) => {
     update((draft) => {
+      const replacement = createGpu(id);
+      const previousPort = draft.connections[0]?.from.portId;
       draft.devices = draft.devices.filter(
         (device) => device.kind !== 'gpu' && device.id !== 'motherboard-1',
       );
-      draft.devices.unshift(createGpu(id));
+      draft.devices.unshift(replacement);
       draft.goal.sourceDeviceId = 'gpu-1';
-      if (draft.connections[0]) draft.connections[0].from = { deviceId: 'gpu-1', portId: 'dp-1' };
+      if (draft.connections[0])
+        draft.connections[0].from = {
+          deviceId: 'gpu-1',
+          portId: replacement.ports.some((port) => port.id === previousPort)
+            ? previousPort!
+            : 'dp-1',
+        };
     });
     setModal(null);
     selectDevice('gpu');
+  };
+  const setDisplay = (id: 'demo' | 'xeneon-flex') => {
+    const replacement = createDisplay(id, display.id);
+    const input =
+      replacement.ports.find(
+        (port) => port.connector === displayPort.connector && port.role !== 'source',
+      ) ?? replacement.ports[0];
+    update((draft) => {
+      draft.devices = draft.devices.map((device) =>
+        device.id === display.id ? replacement : device,
+      );
+      if (draft.connections[0])
+        draft.connections[0].to = { deviceId: replacement.id, portId: input.id };
+      draft.goal.modeId = id === 'xeneon-flex' ? 'uwqhd60' : '4k60';
+    });
+    setPendingInput(input.id);
+    setModal(null);
+    selectDevice('display');
+    setNotice(
+      id === 'xeneon-flex'
+        ? 'XENEON FLEX ajouté. Objectif initial : 3440 × 1440 à 60 Hz. Le câble et la source sont conservés.'
+        : 'Profil de démonstration sélectionné.',
+    );
   };
   const changeOrigin = (motherboard: boolean) => {
     if (!motherboard) {
@@ -409,8 +480,22 @@ export function App() {
       const port = draft.devices
         .find((device) => device.id === display.id)!
         .ports.find((port) => port.id === displayPort.id)!;
+      const originalSource = port.source;
+      const preservedEvidence = Object.fromEntries(
+        [
+          'connector',
+          'role',
+          'protocols',
+          'maxPayloadGbps',
+          'dsc',
+          'supportedModeIds',
+          'supportedColorDepths',
+          'modeListComplete',
+        ].map((key) => [key, port.evidence?.[key] ?? originalSource]),
+      );
       Object.assign(port, patch, { source: userSource });
       port.evidence = {
+        ...preservedEvidence,
         ...port.evidence,
         ...Object.fromEntries(Object.keys(patch).map((key) => [key, userSource])),
       };
@@ -420,9 +505,11 @@ export function App() {
       setup.devices
         .flatMap((device) => [
           device.source,
+          ...(device.display ? [device.display.source] : []),
           ...device.ports.flatMap((port) => [port.source, ...Object.values(port.evidence ?? {})]),
         ])
         .concat(setup.cables.map((item) => item.source))
+        .concat(analysis.requestedMode ? [analysis.requestedMode.source] : [])
         .map((item) => [JSON.stringify(item), item]),
     ).values(),
   ];
@@ -478,7 +565,7 @@ export function App() {
           </button>
           <div className="sidebar-separator" />
           <div className="sidebar-label library-heading">
-            BIBLIOTHÈQUE <span>3</span>
+            BIBLIOTHÈQUE <span>4</span>
           </div>
           <p className="sidebar-hint">Les premières briques de votre installation.</p>
           {GPU_CATALOG.map((gpu) => (
@@ -493,6 +580,16 @@ export function App() {
               <Plus size={15} />
             </button>
           ))}
+          <button className="library-item" onClick={() => setDisplay('xeneon-flex')}>
+            <span className="library-icon purple">
+              <Monitor size={21} />
+            </span>
+            <span>
+              <strong>XENEON FLEX</strong>
+              <small>Corsair · Écran OLED 45″</small>
+            </span>
+            <Plus size={15} />
+          </button>
           <button className="library-item" onClick={() => selectDevice('display')}>
             <span className="library-icon purple">
               <Monitor size={21} />
@@ -791,8 +888,18 @@ export function App() {
                         </button>
                       ))}
                     </div>
+                    {display.catalogId === 'xeneon-flex' && (
+                      <PublishedModes
+                        port={displayPort}
+                        onSelect={(id) =>
+                          update((draft) => {
+                            draft.goal.modeId = id;
+                          })
+                        }
+                      />
+                    )}
                     <div className="section-kicker mode-heading">
-                      MODES DISPONIBLES <span>{analysis.availableModes.length}</span>
+                      MODES VALIDÉS POUR CETTE CHAÎNE <span>{analysis.availableModes.length}</span>
                     </div>
                     <div className="available-modes">
                       {analysis.availableModes.length ? (
@@ -989,6 +1096,25 @@ export function App() {
                       <>
                         <div className="section-kicker">CAPACITÉS DE L’ÉCRAN</div>
                         <h2>Ce que l’entrée accepte.</h2>
+                        <label className="field-label" htmlFor="screen-model">
+                          Modèle d’écran
+                        </label>
+                        <select
+                          id="screen-model"
+                          value={display.catalogId === 'xeneon-flex' ? 'xeneon-flex' : 'demo'}
+                          onChange={(event) =>
+                            setDisplay(event.target.value as 'demo' | 'xeneon-flex')
+                          }
+                        >
+                          {DISPLAY_CATALOG.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.name}
+                            </option>
+                          ))}
+                        </select>
+                        {display.catalogId === 'xeneon-flex' && (
+                          <DisplayReference device={display} port={displayPort} />
+                        )}
                         <label className="field-label" htmlFor="screen-name">
                           Nom de l’écran
                         </label>
@@ -1006,8 +1132,9 @@ export function App() {
                           }
                         />
                         <p className="fine-print">
-                          La démonstration utilise un écran fictif. Remplacez ses capacités par
-                          celles de votre modèle.
+                          {display.catalogId === 'xeneon-flex'
+                            ? 'Les champs ci-dessous concernent l’entrée sélectionnée. Toute modification est marquée comme déclaration utilisateur.'
+                            : 'La démonstration utilise un écran fictif. Remplacez ses capacités par celles de votre modèle.'}
                         </p>
                         <label className="field-label" htmlFor="screen-input">
                           Configurer l’entrée
@@ -1118,6 +1245,22 @@ export function App() {
                           La négociation DSC n’est pas simulée. Sa présence ne confirme pas un mode
                           compressé.
                         </p>
+                        <label className="checkbox-row">
+                          <input
+                            type="checkbox"
+                            checked={displayPort.modeListComplete !== false}
+                            onChange={(event) =>
+                              patchDisplayPort({ modeListComplete: event.target.checked })
+                            }
+                          />
+                          <span>Liste exhaustive des modes</span>
+                        </label>
+                        {displayPort.modeListComplete === false && (
+                          <p className="fine-print">
+                            Un mode absent de cette liste reste non documenté, sans être déclaré
+                            impossible.
+                          </p>
+                        )}
                         <div className="checkbox-heading">Modes déclarés sur cette entrée</div>
                         {VIDEO_MODES.map((item) => (
                           <label className="checkbox-row" key={item.id}>
@@ -1142,6 +1285,7 @@ export function App() {
                           onClick={() =>
                             patchDisplayPort({
                               supportedModeIds: null,
+                              modeListComplete: false,
                               maxPayloadGbps: null,
                               supportedColorDepths: null,
                               protocols: null,
@@ -1247,8 +1391,9 @@ export function App() {
                   <strong>{format(analysis.requiredGbps)}</strong>
                 </div>
                 <p>
-                  Budget limité par le maillon le moins capable. Le contrôle du débit seul ne
-                  garantit pas l’affichage.
+                  {analysis.bottleneckGbps === null
+                    ? 'Le débit d’au moins un maillon n’est pas documenté. La capacité de toute la chaîne reste à confirmer.'
+                    : 'Budget limité par le maillon le moins capable. Le contrôle du débit seul ne garantit pas l’affichage.'}
                 </p>
               </div>
             </div>
@@ -1265,8 +1410,9 @@ export function App() {
               </ul>
               <p>
                 Le diagnostic concerne le signal vidéo, pas les performances en jeu. Les timings de
-                démonstration sont des exemples ; un écran réel nécessite ses modes documentés. DSC
-                et les chemins complexes restent hors de cette première couverture.
+                démonstration sont des exemples. Pour le XENEON FLEX, les modes publiés sont
+                sourcés, mais les timings exacts non publiés restent inconnus. DSC et les chemins
+                complexes restent hors de cette couverture.
               </p>
               <div className="assumption-controls">
                 <label>
@@ -1437,6 +1583,14 @@ export function App() {
                     <Plus size={18} />
                   </button>
                 ))}
+                <button className="catalog-choice" onClick={() => setDisplay('xeneon-flex')}>
+                  <Monitor size={27} />
+                  <span>
+                    <strong>Corsair XENEON FLEX 45WQHD240</strong>
+                    <small>45″ OLED · 3440 × 1440 · Jusqu’à 240 Hz · Fiche sourcée</small>
+                  </span>
+                  <Plus size={18} />
+                </button>
                 <button
                   className="catalog-choice"
                   onClick={() => {
