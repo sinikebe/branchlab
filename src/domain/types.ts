@@ -81,6 +81,18 @@ export interface DscProfile {
   link: { encoding: '8b10b'; laneCount: 1 | 2 | 4; fec: true };
   source: Source;
 }
+/** Published link facts, separate from a validated usable video budget. */
+export interface VideoReference {
+  version: string;
+  transport: string;
+  laneCount: number | null;
+  laneRateGbps: number | null;
+  rawBandwidthGbps: number | null;
+  maxMode: string | null;
+  notes: string[];
+  source: Source;
+  evidence?: Record<string, Source>;
+}
 export interface Port {
   id: string;
   label: string;
@@ -98,6 +110,7 @@ export interface Port {
   source: Source;
   /** Overrides source for individual characteristics derived from another reference. */
   evidence?: Record<string, Source>;
+  videoReference?: VideoReference;
 }
 export interface InternalRoute {
   fromPortId: string;

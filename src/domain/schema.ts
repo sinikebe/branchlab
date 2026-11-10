@@ -58,6 +58,19 @@ const port = z.object({
     .optional(),
   source,
   evidence: z.record(z.string(), source).optional(),
+  videoReference: z
+    .object({
+      version: name,
+      transport: name,
+      laneCount: z.number().int().positive().max(128).nullable(),
+      laneRateGbps: payload,
+      rawBandwidthGbps: payload,
+      maxMode: z.string().min(1).max(2000).nullable(),
+      notes: z.array(z.string().min(1).max(2000)).max(100),
+      source,
+      evidence: z.record(z.string(), source).optional(),
+    })
+    .optional(),
 });
 const route = z.object({
   fromPortId: id,

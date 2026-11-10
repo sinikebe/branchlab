@@ -1,4 +1,4 @@
-import type { Device, GpuId, GpuSpecifications, Port, Source } from './types';
+import type { Device, GpuId, GpuSpecifications, Port, Source, VideoReference } from './types';
 
 const checkedAt = '2026-11-10';
 const nvidia = (model: string, path: string): Source => ({
@@ -11,6 +11,67 @@ const nvidia = (model: string, path: string): Source => ({
 export const NVIDIA_4090 = nvidia('GeForce RTX 4090', '40-series/rtx-4090');
 export const NVIDIA_5090 = nvidia('GeForce RTX 5090', '50-series/rtx-5090');
 export const NVIDIA_5080 = nvidia('GeForce RTX 5080', '50-series/rtx-5080');
+export const NVIDIA_RTX40_HDMI: Source = {
+  kind: 'manufacturer',
+  label: 'NVIDIA — HDMI des GeForce RTX 40 : FRL 48 Gbit/s, DSC 1.2a et VRR',
+  url: 'https://www.nvidia.com/en-us/geforce/news/geforce-rtx-hdmi-2-1-support/',
+  checkedAt,
+};
+export const HDMI_FRL_SOURCE: Source = {
+  kind: 'standard',
+  label: 'Texas Instruments — SLLA598, débits FRL et nombre de voies HDMI',
+  url: 'https://www.ti.com/lit/an/slla598/slla598.pdf',
+  checkedAt,
+};
+export const HDMI_FRL_FRAMING: Source = {
+  kind: 'standard',
+  label: 'Altera — FRL : blocs de données, parité FEC et superblocs',
+  url: 'https://docs.altera.com/r/docs/823533/26.1/gts-hdmi-ip-user-guide/frl-character-block-and-super-block-mapping',
+  checkedAt,
+};
+
+const hdmiReferences: Partial<Record<GpuId, VideoReference>> = {
+  rtx4090: {
+    version: 'HDMI 2.1a',
+    transport: 'FRL · 4 voies à 12 Gbit/s',
+    laneCount: 4,
+    laneRateGbps: 12,
+    rawBandwidthGbps: 48,
+    maxMode: 'Jusqu’à 4K 240 Hz ou 8K 60 Hz, HDR 12 bits avec DSC',
+    notes: [
+      'NVIDIA documente le FRL à 48 Gbit/s bruts, DSC 1.2a et VRR pour les GeForce RTX 40.',
+      'Le débit brut inclut le codage et les surcoûts du transport. Il ne remplace pas un budget vidéo utilisable ni un profil DSC HDMI négocié.',
+    ],
+    source: NVIDIA_4090,
+    evidence: {
+      rawBandwidthGbps: NVIDIA_RTX40_HDMI,
+      transport: HDMI_FRL_SOURCE,
+      framing: HDMI_FRL_FRAMING,
+    },
+  },
+  rtx5080: {
+    version: 'HDMI 2.1b',
+    transport: 'HDMI · débit FRL non précisé dans la fiche du modèle',
+    laneCount: null,
+    laneRateGbps: null,
+    rawBandwidthGbps: null,
+    maxMode: 'Jusqu’à 4K 480 Hz ou 8K 120 Hz, HDR 12 bits avec DSC',
+    notes: [
+      'NVIDIA documente HDMI 2.1b, Gaming VRR et les plafonds HDR 12 bits avec DSC.',
+      'La fiche et le guide Founders Edition ne donnent pas le débit FRL de cette sortie. Le seul numéro HDMI ne permet pas de lui attribuer 48 Gbit/s.',
+      'Un plafond constructeur avec DSC n’est pas un timing ni un profil de compression accepté par toute la chaîne.',
+    ],
+    source: NVIDIA_5080,
+    evidence: {
+      connector: {
+        kind: 'manufacturer',
+        label: 'NVIDIA — RTX 5080 Founders Edition, guide, prise HDMI p. 4 et 10',
+        url: 'https://www.nvidia.com/content/geforce-gtx/GeForce_RTX_5080_User_Guide_Rev1.pdf',
+        checkedAt,
+      },
+    },
+  },
+};
 export const NVIDIA_5070_FAMILY = nvidia(
   'GeForce RTX 5070 Ti et 5070',
   '50-series/rtx-5070-family',
@@ -42,6 +103,7 @@ interface GpuOutputGroup {
   maxPayloadGbps: number | null;
   dsc: boolean;
   supportedColorDepths: (8 | 10 | 12)[];
+  videoReference?: VideoReference;
 }
 export interface GpuCatalogEntry {
   id: GpuId;
@@ -243,6 +305,7 @@ export const GPU_CATALOG: GpuCatalogEntry[] = models.map((model) => {
         maxPayloadGbps: null,
         dsc: true,
         supportedColorDepths: [8, 10, 12],
+        ...(hdmiReferences[id] ? { videoReference: hdmiReferences[id] } : {}),
       },
     ],
     specs: {
@@ -263,7 +326,14 @@ export const GPU_CATALOG: GpuCatalogEntry[] = models.map((model) => {
           ],
       notes: [
         'Conception de référence NVIDIA. Connecteurs, fréquences, dimensions et alimentation peuvent varier selon la carte partenaire.',
-        'Les débits DisplayPort indiqués supposent quatre voies. Le débit HDMI exact reste non documenté dans ce profil.',
+        ...(hdmiReferences[id]
+          ? [
+              'Les débits DisplayPort indiqués supposent quatre voies.',
+              ...hdmiReferences[id]!.notes,
+            ]
+          : [
+              'Les débits DisplayPort indiqués supposent quatre voies. Le débit HDMI exact reste non documenté dans ce profil.',
+            ]),
         'La puissance d’alimentation recommandée concerne le système complet. Les prises et adaptateurs doivent être vérifiés sur votre modèle.',
         'Les spécifications de mémoire, de calcul, de PCIe et d’alimentation sont informatives ; elles ne prédisent pas les performances en jeu ni un bilan électrique.',
       ],
@@ -313,6 +383,7 @@ export function createGpu(id: GpuId): Device {
       supportedModeIds: null,
       supportedColorDepths: [...output.supportedColorDepths],
       source: entry.source,
+      ...(output.videoReference ? { videoReference: output.videoReference } : {}),
       ...(output.maxPayloadGbps !== null ? { evidence: { maxPayloadGbps: DP_SOURCE } } : {}),
     })),
   );

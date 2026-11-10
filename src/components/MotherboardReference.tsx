@@ -1,5 +1,6 @@
 import { ExternalLink, Info, Layers3 } from 'lucide-react';
 import type { Device, Source } from '../domain';
+import { VideoReferenceNotes } from './VideoReferenceNotes';
 
 function ReferenceList({
   title,
@@ -38,7 +39,9 @@ export function MotherboardReference({ device }: { device: Device }) {
     device.ports.some(
       (port) =>
         port.source.kind === 'user' ||
-        Object.values(port.evidence ?? {}).some((item) => item.kind === 'user'),
+        Object.values(port.evidence ?? {}).some((item) => item.kind === 'user') ||
+        port.videoReference?.source.kind === 'user' ||
+        Object.values(port.videoReference?.evidence ?? {}).some((item) => item.kind === 'user'),
     );
   const sourceFor = (key: string) => specs.evidence?.[key] ?? specs.source;
   return (
@@ -82,6 +85,7 @@ export function MotherboardReference({ device }: { device: Device }) {
       )}
       <details className="reference-notes gpu-details motherboard-details">
         <summary>Spécifications complètes</summary>
+        <VideoReferenceNotes ports={device.ports} />
         <ReferenceList
           title="Processeurs compatibles"
           items={specs.cpuSupport}
