@@ -6,7 +6,7 @@ export GIT_TERMINAL_PROMPT=0
 repository="${BRANCHLAB_REPOSITORY:-https://github.com/sinikebe/branchlab.git}"
 checkout="${BRANCHLAB_CHECKOUT:-/root/branchlab-dev}"
 state="${BRANCHLAB_STATE:-/root/.local/share/branchlab}"
-controller="$(realpath "$(dirname "${BASH_SOURCE[0]}")/..")"
+controller="$(realpath -m "${BRANCHLAB_SOURCE:-/root/branchlab}")"
 checkout="$(realpath -m "$checkout")"
 state="$(realpath -m "$state")"
 

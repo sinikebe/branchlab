@@ -48,6 +48,8 @@ Les protections de branches et l’obligation de revue ne sont pas imposées par
 
 L’instance est disponible sur **http://192.168.1.60:5173** après installation des services ci-dessous. Cette adresse est propre à la machine actuelle. Elle écoute sur l’adresse privée indiquée, sans tunnel ni publication externe. Ne pas ajouter de redirection de port sur le routeur. Le serveur HTTP n’a pas d’authentification ni de TLS : il est destiné à un réseau local de confiance.
 
+Les scripts des services sont installés dans `/usr/local/lib/branchlab`, indépendamment du dépôt de travail. Changer de branche dans ce dépôt ne les retire pas. Après une modification des scripts ou unités, réinstaller ces fichiers avec les commandes ci-dessous, puis redémarrer le service concerné.
+
 Deux services sont séparés :
 
 - `branchlab-dev` sert uniquement les fichiers statiques de la dernière construction validée.
@@ -60,6 +62,8 @@ Le script refuse un checkout qui contient le dépôt de travail, qui y est imbri
 Installation sur cette machine Linux avec systemd, une fois la branche distante `dev` créée et Chromium installé via `npx playwright install --with-deps chromium` :
 
 ```bash
+install -d -m 755 /usr/local/lib/branchlab
+install -m 755 scripts/serve-dev.py scripts/update-dev.sh /usr/local/lib/branchlab/
 install -m 644 ops/branchlab-dev.service ops/branchlab-update.service ops/branchlab-update.timer /etc/systemd/system/
 systemctl daemon-reload
 systemctl start branchlab-update.service
