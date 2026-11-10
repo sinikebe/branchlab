@@ -38,11 +38,29 @@ Le brouillon est sauvegardé dans IndexedDB sur ce navigateur. Effacer les donn�
 
 - Une fonctionnalité se développe dans `feature/<nom>`.
 - Après validation, elle est fusionnée dans `dev` et envoyée vers le dépôt privé.
+- Une fois la fusion validée et le travail terminé, supprimer la branche de fonctionnalité localement et sur `origin`, après vérification que tous ses commits sont intégrés à `dev`. Conserver `dev`, `main` et les branches non fusionnées.
 - L’instance de développement du réseau local suit uniquement `origin/dev`.
 - Une release est préparée et fusionnée séparément dans `main` ; aucune release automatique n’est créée.
-- GitHub Actions vérifie les branches de fonctionnalité, `dev`, `main` et les demandes de fusion. Il ne déploie rien.
+- GitHub Actions vérifie les branches de fonctionnalité, `dev`, `main` et les demandes de fusion avec le runner self-hosted de ce serveur. Il ne déploie rien.
 
 Les protections de branches et l’obligation de revue ne sont pas imposées par les fichiers de workflow : elles se configurent dans les paramètres GitHub.
+
+### Runner CI sur le serveur de développement
+
+Le workflow utilise les labels `[self-hosted, Linux, X64]`, présents sur le runner `branchlab` enregistré pour ce dépôt. Son service `actions.runner.sinikebe-branchlab.branchlab.service` démarre automatiquement et s’exécute avec le compte `ci-runner`, dans `/home/ci-runner/actions-runner`. Son checkout sous `_work` est séparé du dépôt de travail et de `/root/branchlab-dev`.
+
+La CI installe la version Node indiquée dans `.node-version`, les dépendances verrouillées et Chromium dans le cache du compte runner, puis lance les mêmes contrôles, parcours navigateur et construction. Les bibliothèques système de Chromium sont déjà installées sur cette machine ; sur un nouveau serveur, un administrateur doit les préparer avec `npx playwright install-deps chromium`. Les tâches CI n’ont pas besoin de droits administrateur.
+
+Les tests de la CI utilisent uniquement `127.0.0.1:5177`, via `BRANCHLAB_E2E_PORT`. Les tests locaux et ceux de la mise à jour automatique gardent le port `5175` par défaut. Chaque exécution démarre son propre serveur et échoue si son port est occupé, afin de ne jamais valider un autre checkout. La CI limite les tests navigateur à deux processus et annule les validations périmées d’une même branche. Le serveur LAN sur le port `5173` continue à servir la dernière version validée.
+
+Vérifier l’état du runner :
+
+```bash
+systemctl status actions.runner.sinikebe-branchlab.branchlab.service
+journalctl -u actions.runner.sinikebe-branchlab.branchlab.service -n 40 --no-pager
+```
+
+Références : [routage des tâches vers les runners self-hosted](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/use-in-a-workflow), [Playwright en CI](https://playwright.dev/docs/ci).
 
 ## Instance de développement sur le réseau local
 
