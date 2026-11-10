@@ -51,6 +51,10 @@ Le champ facultatif `Device.gpu` conserve les caractéristiques descriptives et 
 
 ## Extension
 
+Les profils AM5 ajoutent `Device.kind: 'motherboard'` et les métadonnées facultatives `Device.motherboard` au schéma 1. Les anciens profils `other` restent lisibles. Les ports de ces profils représentent uniquement les sorties vidéo documentées ; USB, Ethernet, audio, alimentation, PCIe et stockage disposent d’un inventaire descriptif sourcé, sans simulation de leurs raccordements. Voir [les deux cartes mères et leurs sources](hardware/am5-motherboards.md).
+
+Le circuit graphique du processeur et son activation ne sont pas encore renseignés par ces profils. Le diagnostic `source-unverified` reste donc indéterminé sur une sortie de carte mère, même si une GeForce est présente dans le setup. Les plafonds annoncés HDMI/USB-C et les débits de données USB4 ne deviennent pas un budget vidéo négocié ; voies DP, timings, couleurs et DSC absents restent inconnus.
+
 Ajouter des appareils et connecteurs ne demande pas de changer la forme du graphe. Une nouvelle famille requiert néanmoins ses règles : conversions, alimentation, capacités par mode, systèmes et firmware, allocation de ressources internes et budgets simultanés. Les futurs changements s’accompagnent d’une évolution du schéma et de migrations. Ajouter une règle ne doit pas faire passer des caractéristiques manquantes à zéro ou à faux.
 
 Les tests couvrent une installation valide, un connecteur incompatible, un protocole incompatible, une limite de capacité, des données inconnues, la sortie de carte mère, DSC, les timings limites, la profondeur de couleur, la capacité d’un intermédiaire, les références cassées et la stabilité JSON.

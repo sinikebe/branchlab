@@ -11,6 +11,7 @@ export type GpuId =
   | 'rtx5060'
   | 'rtx5050';
 export type DisplayId = 'demo' | 'xeneon-flex';
+export type MotherboardId = 'asrock-b850-pro-a-wifi' | 'msi-mpg-x870e-carbon-wifi';
 export interface Source {
   kind: 'manufacturer' | 'standard' | 'user' | 'demo';
   label: string;
@@ -35,6 +36,31 @@ export interface GpuSpecifications {
   powerConnectionNotes: string[];
   maxDisplays: number | null;
   displaySupportNotes: string[];
+  notes: string[];
+  source: Source;
+  evidence?: Record<string, Source>;
+}
+/** Reference inventory; CPU, RAM, PCIe, storage and network are not yet simulated. */
+export interface MotherboardSpecifications {
+  manufacturer: string;
+  socket: string;
+  chipset: string;
+  formFactor: string;
+  cpuSupport: string[];
+  memory: {
+    type: string;
+    slots: number;
+    maxCapacityGB: number;
+    maxOcMtps: number | null;
+    notes: string[];
+  };
+  expansionSlots: string[];
+  storage: string[];
+  rearConnectors: string[];
+  internalConnectors: string[];
+  network: string[];
+  audio: string[];
+  displayNotes: string[];
   notes: string[];
   source: Source;
   evidence?: Record<string, Source>;
@@ -83,12 +109,13 @@ export interface InternalRoute {
 export interface Device {
   id: string;
   name: string;
-  kind: 'gpu' | 'display' | 'adapter' | 'other';
+  kind: 'gpu' | 'motherboard' | 'display' | 'adapter' | 'other';
   ports: Port[];
   routes: InternalRoute[];
   source: Source;
   catalogId?: string;
   gpu?: GpuSpecifications;
+  motherboard?: MotherboardSpecifications;
   display?: {
     diagonalInches: number;
     panelTechnology: string;

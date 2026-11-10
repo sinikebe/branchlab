@@ -10,6 +10,7 @@ L'utilisateur doit voir si un signal vidéo est possible et quels modes document
 
 - Atelier visuel avec appareils déplaçables, ports et liaison explicite.
 - Sélection de la carte, du port de sortie, du câble et de l'entrée écran.
+- Deux cartes mères AM5 sourcées : ASRock B850 Pro-A WiFi et MSI MPG X870E CARBON WIFI, avec inventaire de connecteurs et sorties vidéo dépendant du processeur. Carte graphique et carte mère sont conservées lors du changement d’origine du signal.
 - Objectif de résolution/fréquence ; modes écran et capacités personnalisables.
 - Diagnostics compatibles / incompatibles / indéterminés, explications, sources, hypothèses.
 - Sauvegarde locale, export/import JSON validé, restauration d'une démo clairement identifiée.
