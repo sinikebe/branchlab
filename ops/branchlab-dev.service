@@ -8,7 +8,7 @@ Type=simple
 User=root
 Environment=BRANCHLAB_BIND=192.168.1.60
 Environment=BRANCHLAB_PORT=5173
-ExecStart=/usr/bin/python3 /root/branchlab/scripts/serve-dev.py
+ExecStart=/usr/bin/python3 /usr/local/lib/branchlab/serve-dev.py
 Restart=on-failure
 RestartSec=3
 NoNewPrivileges=true
