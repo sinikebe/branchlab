@@ -44,6 +44,7 @@ import {
   createCable,
   CABLE_PROFILES,
   GPU_CATALOG,
+  getGpuId,
   VIDEO_MODES,
   type Setup,
   type Device,
@@ -55,6 +56,7 @@ import { loadSetup, saveSetup, parseSetup, exportSetup } from './storage';
 import { validateEditorSetup } from './editor-validation';
 import { DisplayReference, PublishedModes } from './components/DisplayReference';
 import { DscSettings } from './components/DscSettings';
+import { GpuReference } from './components/GpuReference';
 import { Changelog } from './components/Changelog';
 import { version as appVersion } from '../package.json';
 
@@ -148,7 +150,11 @@ function Equipment({ data }: NodeProps<EquipmentNode>) {
             : data.device.display
               ? `${data.device.display.diagonalInches}″ ${data.device.display.panelTechnology} · ${data.device.display.nativeWidth} × ${data.device.display.nativeHeight}`
               : data.device.kind === 'gpu'
-                ? 'NVIDIA · design de référence'
+                ? data.device.gpu
+                  ? `${data.device.gpu.memoryGB} Go ${data.device.gpu.memoryType} · ${data.device.gpu.architecture}`
+                  : getGpuId(data.device)
+                    ? 'NVIDIA · design de référence'
+                    : 'Profil importé · données conservées'
                 : 'Capacités à renseigner'}
         </p>
       </button>
@@ -206,6 +212,7 @@ export function App() {
   const modalClose = useRef<HTMLButtonElement>(null);
   const [flow, setFlow] = useState<ReactFlowInstance<EquipmentNode> | null>(null);
   const source = setup.devices.find((device) => device.id === setup.goal.sourceDeviceId)!;
+  const gpuModelId = source.kind === 'gpu' ? getGpuId(source) : null;
   const display = setup.devices.find((device) => device.id === setup.goal.displayDeviceId)!;
   const cable = setup.cables[0];
   const connection = setup.connections[0];
@@ -375,9 +382,10 @@ export function App() {
   }, [flow, source.id]);
 
   const setGpu = (id: GpuId) => {
+    const output = sourcePort.id;
+    const replacement = createGpu(id);
+    const replacementPort = replacement.ports.some((port) => port.id === output) ? output : 'dp-1';
     update((draft) => {
-      const replacement = createGpu(id);
-      const previousPort = draft.connections[0]?.from.portId;
       draft.devices = draft.devices.filter(
         (device) => device.kind !== 'gpu' && device.id !== 'motherboard-1',
       );
@@ -386,11 +394,10 @@ export function App() {
       if (draft.connections[0])
         draft.connections[0].from = {
           deviceId: 'gpu-1',
-          portId: replacement.ports.some((port) => port.id === previousPort)
-            ? previousPort!
-            : 'dp-1',
+          portId: replacementPort,
         };
     });
+    setPendingOutput(replacementPort);
     setModal(null);
     selectDevice('gpu');
   };
@@ -419,13 +426,29 @@ export function App() {
   };
   const changeOrigin = (motherboard: boolean) => {
     if (!motherboard) {
-      setGpu(
-        setup.devices.find((device) => device.kind === 'gpu')?.name.includes('5080')
-          ? 'rtx5080'
-          : 'rtx4090',
+      const previousGpu = setup.devices.find(
+        (device) => device.kind === 'gpu' && device.ports.length > 0,
       );
+      if (!previousGpu) {
+        setNotice(
+          'Choisissez votre carte graphique dans la bibliothèque pour documenter cette sortie.',
+        );
+        setModal('library');
+        return;
+      }
+      const output = previousGpu.ports.some((port) => port.id === pendingOutput)
+        ? pendingOutput
+        : previousGpu.ports[0].id;
+      update((draft) => {
+        draft.devices = draft.devices.filter((device) => device.id !== 'motherboard-1');
+        draft.goal.sourceDeviceId = previousGpu.id;
+        if (draft.connections[0])
+          draft.connections[0].from = { deviceId: previousGpu.id, portId: output };
+      });
+      setPendingOutput(output);
       return;
     }
+    setPendingOutput(sourcePort.id);
     update((draft) => {
       const board: Device = {
         id: 'motherboard-1',
@@ -576,6 +599,7 @@ export function App() {
         .flatMap((device) => [
           device.source,
           ...(device.display ? [device.display.source] : []),
+          ...(device.gpu ? [device.gpu.source, ...Object.values(device.gpu.evidence ?? {})] : []),
           ...device.ports.flatMap((port) => [
             port.source,
             ...Object.values(port.evidence ?? {}),
@@ -639,7 +663,7 @@ export function App() {
           </button>
           <div className="sidebar-separator" />
           <div className="sidebar-label library-heading">
-            BIBLIOTHÈQUE <span>4</span>
+            BIBLIOTHÈQUE <span>{GPU_CATALOG.length + DISPLAY_CATALOG.length}</span>
           </div>
           <p className="sidebar-hint">Les premières briques de votre installation.</p>
           {GPU_CATALOG.map((gpu) => (
@@ -648,7 +672,7 @@ export function App() {
                 <Cpu size={21} />
               </span>
               <span>
-                <strong>{gpu.name.replace('NVIDIA GeForce ', '')}</strong>
+                <strong>{gpu.shortName.replace(/(\d+) Go$/, '$1\u00a0Go')}</strong>
                 <small>NVIDIA · Carte graphique</small>
               </span>
               <Plus size={15} />
@@ -1071,9 +1095,14 @@ export function App() {
                             </label>
                             <select
                               id="gpu-model"
-                              value={source.name.includes('5080') ? 'rtx5080' : 'rtx4090'}
+                              value={gpuModelId ?? ''}
                               onChange={(event) => setGpu(event.target.value as GpuId)}
                             >
+                              {!gpuModelId && (
+                                <option value="" disabled>
+                                  Profil importé · {source.name}
+                                </option>
+                              )}
                               {GPU_CATALOG.map((item) => (
                                 <option key={item.id} value={item.id}>
                                   {item.name}
@@ -1086,10 +1115,22 @@ export function App() {
                           <Info size={16} />
                           <p>
                             {source.kind === 'gpu'
-                              ? 'Profil NVIDIA de référence. Les ports d’une carte partenaire peuvent différer.'
+                              ? gpuModelId
+                                ? 'Profil NVIDIA de référence. Les ports d’une carte partenaire peuvent différer.'
+                                : 'Profil importé : ses caractéristiques sont conservées sans les attribuer à une carte du catalogue.'
                               : 'La carte graphique dédiée ne fournit pas automatiquement le signal d’une sortie de carte mère. Le processeur et le routage doivent être documentés.'}
                           </p>
                         </div>
+                        {source.kind === 'gpu' &&
+                          (source.gpu ? (
+                            <GpuReference device={source} />
+                          ) : (
+                            <p className="fine-print">
+                              Cette fiche ne contient pas de caractéristiques détaillées. Choisissez
+                              un modèle dans Équipements pour charger sa référence NVIDIA.
+                            </p>
+                          ))}
+                        <div className="section-kicker">SORTIES VIDÉO</div>
                         <div className="spec-list">
                           {source.ports.map((port) => (
                             <div key={port.id}>
@@ -1700,8 +1741,8 @@ export function App() {
                 </p>
                 <ol className="guide-list">
                   <li>
-                    <strong>Choisissez une source.</strong> RTX 4090, RTX 5080 ou sortie de carte
-                    mère non documentée.
+                    <strong>Choisissez une source.</strong> GeForce RTX 50, RTX 4090 ou sortie de
+                    carte mère non documentée.
                   </li>
                   <li>
                     <strong>Renseignez votre écran.</strong> Cliquez sur sa carte pour adapter les

@@ -2,7 +2,7 @@
 
 ## Décisions validées
 
-Application statique, sans compte. Vision : reproduire tout un setup, avec tous types de connecteurs et des chemins matériels complets, sans prétendre simuler les familles non implémentées. Première tranche : une NVIDIA GeForce RTX 4090 ou RTX 5080 (conception de référence) reliée à un écran personnalisable par un câble explicite.
+Application statique, sans compte. Vision : reproduire tout un setup, avec tous types de connecteurs et des chemins matériels complets, sans prétendre simuler les familles non implémentées. Tranche actuelle : une NVIDIA GeForce RTX 50 de bureau ou RTX 4090 (conception de référence) reliée à un écran personnalisable ou au XENEON FLEX par un câble explicite.
 
 L'utilisateur doit voir si un signal vidéo est possible et quels modes documentés sont disponibles, en fonction de toute la chaîne. Le modèle distingue l'origine du signal (carte graphique, carte mère ou autre) : une sortie de carte mère ne doit jamais hériter automatiquement des capacités de la carte dédiée.
 
