@@ -22,10 +22,13 @@ export function createBuildInfo({ version, env = process.env, git = readGit }) {
   return {
     version,
     commit:
+      validCommit(env.SINIVERSE_SHA) ||
       validCommit(env.WORKERS_CI_COMMIT_SHA) ||
       validCommit(env.GITHUB_SHA) ||
       validCommit(git(['rev-parse', 'HEAD'])),
     branch:
+      env.SINIVERSE_SOURCE_BRANCH ||
+      env.SINIVERSE_BRANCH ||
       env.WORKERS_CI_BRANCH ||
       env.GITHUB_HEAD_REF ||
       env.GITHUB_REF_NAME ||
