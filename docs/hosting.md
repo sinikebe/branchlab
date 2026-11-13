@@ -2,7 +2,7 @@
 
 La publication de BranchLab utilise **Cloudflare Workers Builds**, connecté au dépôt privé `sinikebe/branchlab`, sur le Worker `siniverse-branchlab-site`. Le 13 novembre 2026, l'utilisateur a confirmé le transfert de `branchlab.siniverse.cc` vers ce Worker et la suppression de l'ancien Worker `app`. Ne pas recréer l'ancien Worker.
 
-`wrangler.jsonc` décrit désormais le Worker utilisé et son unique Custom Domain de production, `branchlab.siniverse.cc`. Cette déclaration conserve dans le code l'association déjà réalisée dans Cloudflare. Un push sur `main` peut lancer Workers Builds et publier sur ce site.
+`wrangler.jsonc` décrit le Worker utilisé et les deux Custom Domains déjà configurés par l'utilisateur : `branchlab.siniverse.cc` pour la production et `dev.branchlab.siniverse.cc` comme base de Preview. Ces déclarations conservent les associations existantes lors des publications. Un push sur `main` peut lancer Workers Builds et publier sur ce site.
 
 ## Paramètres du Worker connecté à GitHub
 
@@ -26,7 +26,14 @@ Le Worker est déjà créé : ouvrir **Workers & Pages → siniverse-branchlab-s
 | Runtime variables / secrets / bindings | Aucun |
 | Assets / output directory | `dist`, déjà défini dans `wrangler.jsonc` ; aucun champ Pages à renseigner |
 
-Le nom du projet doit correspondre exactement à `name` dans `wrangler.jsonc`. La liste `routes` contient uniquement `{ "pattern": "branchlab.siniverse.cc", "custom_domain": true }`, l'association de production déjà existante. Aucun autre domaine, wildcard ou domaine de développement n'est déclaré. Le domaine de production n'est pas activé comme hôte Preview ; les Previews utilisent `workers.dev`.
+Le nom du projet doit correspondre exactement à `name` dans `wrangler.jsonc`. La liste `routes` conserve uniquement les deux hôtes existants :
+
+| Hôte | Configuration | Usage |
+| --- | --- | --- |
+| `branchlab.siniverse.cc` | `custom_domain: true` | Production |
+| `dev.branchlab.siniverse.cc` | `custom_domain: true`, `enabled: false`, `previews_enabled: true` | Base de Preview uniquement |
+
+Le domaine public de production n'est pas activé comme hôte Preview. Aucun autre domaine ni wildcard n'est ajouté à la configuration.
 
 `SKIP_DEPENDENCY_INSTALL=1` désactive l'installation automatique : la commande de build exécute elle-même `npm ci` à partir du lockfile suivi. Ne pas définir `NODE_ENV=production` pendant cette installation : TypeScript, Vite, les outils de contrôle et Wrangler sont des dépendances de développement.
 
@@ -38,9 +45,11 @@ La version de Node est fixée par le fichier et celle de npm par le champ `packa
 
 La configuration inclut `previews: {}` : l'application ne demande aucun secret, service ni base de données de prévisualisation. Les assets `dist` et leur routage SPA restent déclarés au niveau racine ; les assets de la branche testée sont envoyés par la commande Preview. Aucun contrôle du build ne limite les branches à `main`.
 
-`workers_dev: true` active l'adresse de production sur `workers.dev`. `preview_urls: true` active séparément les URL `workers.dev` des Previews : ce réglage est nécessaire ici, puisqu'aucun domaine personnalisé n'est encore activé pour les Previews. Le bloc `previews: {}` définit leur configuration, mais ne suffit pas à leur fournir une URL. Sans hôte Preview activé, une construction peut réussir sans URL et la PR afficher « No Preview URL ». Conserver la commande du formulaire `npx wrangler preview`, plutôt que `wrangler versions upload`, qui crée une version utilisant les ressources configurées pour la production.
+`workers_dev: true` active l'adresse de production sur `workers.dev`. `preview_urls: true` active séparément les URL `workers.dev` des Previews, en complément de leur base personnalisée déjà active. Le bloc `previews: {}` définit leur configuration, mais ne suffit pas à leur fournir une URL : il faut au moins un hôte Preview activé. Sans hôte, une construction peut réussir sans URL et la PR afficher « No Preview URL ». Conserver la commande du formulaire `npx wrangler preview`, plutôt que `wrangler versions upload`, qui crée une version utilisant les ressources configurées pour la production.
 
-Après création, vérifier **Settings → Builds → Branch control** : production `main`, Preview builds activés. Dans **Domains → Worker URL**, vérifier que **Preview** est activé pour `workers.dev` ; aucun domaine personnalisé de Preview n'est nécessaire au démarrage. Le journal d'un build de branche doit fournir une **Preview URL**, également visible dans l'onglet Previews et, lorsque l'intégration le permet, dans la PR.
+Vérifier **Settings → Builds → Branch control** : production `main`, Preview builds activés. Dans **Domains → Worker URL**, conserver **Preview** activé pour `workers.dev`. Dans les Custom Domains, `dev.branchlab.siniverse.cc` doit rester activé uniquement pour les Previews. Le journal d'un build de branche doit fournir une **Preview URL**, également visible dans l'onglet Previews et, lorsque l'intégration le permet, dans la PR.
+
+`dev.branchlab.siniverse.cc` est une **base de Preview**, pas une adresse stable servant directement la branche `dev`. Les URL de branche sont de la forme `<nom-preview>.dev.branchlab.siniverse.cc` ; par exemple `feature-worker-preview-urls-main.dev.branchlab.siniverse.cc`. Ce schéma existant est conservé, sans ajouter d'alias ni changer les domaines.
 
 L'activation rend les Previews accessibles sur leur URL. Le dépôt reste privé. Si une branche contient un travail qui ne doit pas encore être accessible, désactiver ses builds ou protéger ses Previews dans Cloudflare avant de la pousser.
 
@@ -80,7 +89,7 @@ BranchLab ne déclare pas de Service Worker, de manifeste PWA, de précache ni d
 
 `branchlab.siniverse.cc` est déjà attaché à `siniverse-branchlab-site`. Sa route Custom Domain est suivie dans Wrangler pour que les prochaines publications restent cohérentes avec cet état. Aucun CNAME manuel vers `workers.dev` ni nouveau transfert n'est à effectuer.
 
-L'ancien Worker `app` a été supprimé par l'utilisateur. Toute correction ou restauration doit porter sur une version du Worker actuel, sans recréer l'ancien. La configuration d'un éventuel domaine de développement est une opération distincte ; aucun domaine supplémentaire n'est ajouté ici.
+L'ancien Worker `app` a été supprimé par l'utilisateur. Toute correction ou restauration doit porter sur une version du Worker actuel, sans recréer l'ancien. La base de Preview existante `dev.branchlab.siniverse.cc` est également suivie dans la liste des Custom Domains, car Wrangler publie cette liste avec remplacement de portée. L'omettre pourrait retirer une association configurée manuellement. Aucun domaine supplémentaire n'est créé ici.
 
 ## Références
 

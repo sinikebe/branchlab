@@ -10,6 +10,12 @@
       "pattern": "branchlab.siniverse.cc",
       "custom_domain": true,
     },
+    {
+      "pattern": "dev.branchlab.siniverse.cc",
+      "custom_domain": true,
+      "enabled": false,
+      "previews_enabled": true,
+    },
   ],
   "assets": {
     "directory": "./dist",
