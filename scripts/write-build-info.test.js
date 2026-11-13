@@ -6,6 +6,22 @@ const WORKERS_SHA = '0974124ff1af0c9e18bc7018aa49ff438b9d91d5';
 const GITHUB_SHA = '68c94eaea85c8112872c0d829e96171a6516951a';
 const LOCAL_SHA = 'b4b81cdd91526d8895fc5be69d16df9880db902e';
 
+test('the build marker uses the same injected version as the footer', () => {
+  assert.deepEqual(
+    createBuildInfo({
+      version: '0.0.1',
+      env: { SINIVERSE_VERSION: '1.2.3', SINIVERSE_SHA: LOCAL_SHA, SINIVERSE_BRANCH: 'main' },
+      git: () => assert.fail('The shared CI already supplied metadata'),
+    }),
+    { version: '1.2.3', commit: LOCAL_SHA, branch: 'main' },
+  );
+  assert.throws(
+    () => createBuildInfo({ version: '0.0.1', env: { SINIVERSE_VERSION: 'main' } }),
+    /major.minor.patch/,
+  );
+});
+
+
 test('the shared CI records its immutable revision and actual source branch', () => {
   for (const source of ['main', 'dev', 'feature/video']) {
     assert.deepEqual(

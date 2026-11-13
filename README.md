@@ -28,7 +28,9 @@ La commande `check` vérifie la version et le changelog, puis exécute les contr
 
 Le bas de page affiche la version de l’application et un bouton « Nouveautés ». L’historique présente des notes courtes en français, centrées sur ce qui change pour l’utilisateur. Il ne contient pas de détails de déploiement ou d’infrastructure.
 
-La version provient de `package.json` et les notes de `src/changelog.json`. Elles sont intégrées ensemble à la construction, sans requête réseau supplémentaire. Une évolution utilisateur doit augmenter la version et ajouter son entrée avant fusion dans `dev` ; la publication dans `main` conserve ces mêmes notes. Les contrôles bloquent une version sans notes ou un changement de l’application qui n’a pas été versionné. Voir [la procédure de versionnement](docs/versioning.md).
+La numérotation repart à `0.0.1`, sans retirer les fonctionnalités déjà publiées en `0.4.1`. La CI commune attribue les versions après fusion dans `main` et `dev`, puis injecte `SINIVERSE_VERSION` à la construction. `package.json` et son lockfile restent à `0.0.1` comme repli local ; aucune requête réseau n'est nécessaire pour afficher la version.
+
+Les notes de `src/changelog.json` sont datées et indépendantes des incréments automatiques. Un changement fonctionnel exige toujours une nouvelle note utilisateur. L'historique précédent est conservé intégralement dans `src/changelog-archive.json` et reste consultable dans « Nouveautés », sous l'ancienne numérotation. Voir [la procédure de versionnement](docs/versioning.md).
 
 ## Utiliser la première version
 
