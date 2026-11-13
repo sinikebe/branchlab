@@ -1,63 +1,99 @@
-# Hébergement public de BranchLab
+# Hébergement de BranchLab avec GitHub
 
-Décision du 10 novembre 2026 : utiliser **Cloudflare Workers Static Assets**, sur l’offre gratuite, pour publier la version statique issue de `main`. Le serveur de développement local continue à suivre `dev`.
+La préparation du 13 novembre 2026 remplace la publication depuis GitHub Actions par **Cloudflare Workers Builds**, connecté au dépôt privé `sinikebe/branchlab`. La cible est un **nouveau Worker** nommé `siniverse-branchlab-site`. L'ancien Worker `app` continue à servir sa dernière publication jusqu'au transfert du domaine effectué séparément.
 
-## Publication
+Les fichiers du dépôt ne créent aucun Worker et ne déplacent aucun domaine. Le nom proposé doit être disponible dans le compte Cloudflare choisi ; cette disponibilité n'est pas vérifiée par le dépôt.
 
-Les releases de `main` sont publiées par le runner local après validation. L’adresse HTTPS est donnée par l’étape Cloudflare réussie ; `/version.json` permet de vérifier la version effectivement servie. Une validation locale ou une CI interrompue avant la publication ne prouve pas que le site est en ligne.
+## Créer le nouveau Worker
 
-## Configuration et coût
+Attendre que la préparation soit intégrée dans `main`, puis ouvrir **Workers & Pages → Create application → Connect GitHub** et choisir `sinikebe/branchlab`. Autoriser l'application GitHub Cloudflare à accéder à ce dépôt privé si nécessaire.
 
-`wrangler.jsonc` définit le Worker `app` pour BranchLab, avec le dossier `dist` comme contenu public et le mode `single-page-application` pour les navigations vers les routes de l’application. Il n’y a ni script Worker (`main`), ni base de données, ni liaison KV, R2 ou D1.
-
-Cloudflare indique que les requêtes servant les fichiers statiques sont gratuites et illimitées, sans coût supplémentaire de stockage des assets. Les limites de la plateforme restent applicables ; l’ajout ultérieur d’un traitement serveur ferait intervenir la tarification Workers correspondante. [Tarification des fichiers statiques](https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/), [routage SPA](https://developers.cloudflare.com/workers/static-assets/routing/single-page-application/).
-
-L’adresse de départ aura la forme `https://app.<sous-domaine-du-compte>.workers.dev`. Le nom demandé pour ce compte est `branchlab`, pour obtenir `https://app.branchlab.workers.dev`, sous réserve de disponibilité ; l’adresse réelle est confirmée par le déploiement. `workers_dev: true` active cette adresse publique ; `preview_urls: false` désactive les URL publiques propres aux versions. Le workflow ne publie pas les branches de fonctionnalité ou `dev`.
-
-Un domaine personnalisé pourra être ajouté ensuite ; son achat et son renouvellement sont distincts de l’hébergement gratuit. Cloudflare recommande un domaine propre pour la production et présente `workers.dev` comme un point de départ pour les projets non critiques. [Adresse workers.dev](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/), [URL de versions](https://developers.cloudflare.com/workers/versions-and-deployments/version-urls/).
-
-## Accès à ajouter une seule fois
-
-1. Dans Cloudflare, relever l’identifiant du compte destiné à BranchLab.
-2. Créer un jeton API limité à ce compte. Dans l’interface utilisant les permissions classiques, conserver **Workers Scripts Write** et **Account Settings Read**. Les droits KV, R2, Pages, Agents, Containers et DNS ne sont pas utilisés. Si l’interface propose les nouveaux rôles Workers, **Workers Admin** au niveau du produit permet la création initiale du Worker ; ce rôle ne donne pas l’administration générale du compte.
-3. Dans le dépôt GitHub `sinikebe/branchlab`, ouvrir **Settings → Secrets and variables → Actions → New repository secret**, puis enregistrer :
-
-| Nom | Valeur |
+| Champ | Valeur |
 | --- | --- |
-| `CLOUDFLARE_ACCOUNT_ID` | L’identifiant du compte Cloudflare choisi |
-| `CLOUDFLARE_API_TOKEN` | Le jeton API de déploiement |
+| Project name / Worker name | `siniverse-branchlab-site` |
+| Repository | `sinikebe/branchlab` |
+| Production branch | `main` |
+| Root directory | Racine du dépôt : `/` ; laisser le champ vide si c'est sa valeur par défaut |
+| Build command | `npm ci && npm run check && npm run build` |
+| Deploy command | `npx wrangler deploy` |
+| Preview command | `npx wrangler preview` |
+| Enable Preview builds | Activé |
+| Protect with Cloudflare Access | Désactivé pour cette application publique |
+| Build variable `SKIP_DEPENDENCY_INSTALL` | `1` |
+| Node.js | `24.22.2`, fourni par `.node-version` ; si une variable `NODE_VERSION` est saisie, utiliser la même valeur |
+| npm | `11.19.1`, sélectionné par `packageManager` dans `package.json` |
+| API token | Jeton créé et géré par Workers Builds pour le compte choisi |
+| Runtime variables / secrets / bindings | Aucun |
+| Assets / output directory | `dist`, déjà défini dans `wrangler.jsonc` ; aucun champ Pages à renseigner |
 
-Le jeton reste dans les secrets GitHub. Ne pas le copier dans le code, un fichier suivi par Git ou la conversation. La CI transmet ces deux valeurs uniquement à l’étape de publication.
+Le nom du formulaire doit correspondre exactement à `name` dans `wrangler.jsonc`. Ne pas reprendre `app`, le nom de l'ancien Worker. Aucun `route`, `routes` ou domaine personnalisé n'est déclaré dans le fichier : le premier déploiement ne revendique donc pas `branchlab.siniverse.cc`.
 
-Le déploiement vérifie le sous-domaine gratuit du compte avant d’envoyer le site. S’il existe déjà, il est conservé. Si Cloudflare indique précisément qu’il n’existe pas encore, le script l’enregistre avec le nom demandé dans la variable Actions `CLOUDFLARE_WORKERS_SUBDOMAIN` (par défaut `branchlab`). Ce nom est partagé par les Workers du compte. Un refus d’accès, une panne ou une réponse invalide ne déclenchent aucune création ; un nom indisponible fait échouer la publication. Le script ne renomme jamais un sous-domaine existant et ne modifie aucun domaine DNS personnel. [API d’enregistrement du sous-domaine](https://developers.cloudflare.com/api/resources/workers/subresources/subdomains/methods/update/).
+`SKIP_DEPENDENCY_INSTALL=1` désactive l'installation automatique : la commande de build exécute elle-même `npm ci` à partir du lockfile suivi. Ne pas définir `NODE_ENV=production` pendant cette installation : TypeScript, Vite, les outils de contrôle et Wrangler sont des dépendances de développement.
 
-Après création du Worker, on peut remplacer le jeton par un accès **Editor limité au Worker `app`** : le rôle Admin au niveau produit est requis pour créer un Worker qui n’existe pas encore, tandis qu’Editor permet d’en déployer les versions suivantes. Les anciens droits `Workers Scripts Edit` restent reconnus, mais la documentation Cloudflare recommande les nouveaux rôles. [Rôles Workers](https://developers.cloudflare.com/workers/authorization/workers/), [authentification depuis GitHub Actions](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/).
+La version de Node est fixée par le fichier et celle de npm par le champ `packageManager` exact. Le champ `engines.npm` et une variable `NPM_VERSION` ne sélectionnent pas npm dans Workers Builds. Le `package-lock.json` conserve les versions et empreintes des dépendances. Wrangler `4.160.0` reste verrouillé dans ce lockfile et satisfait le minimum des nouvelles Previews.
 
-Il n’est pas nécessaire de connecter le dépôt à **Workers Builds** : les tests, la construction et l’envoi sont déjà effectués par notre runner self-hosted. Cela garde une seule chaîne de publication.
+## Production et Previews
 
-## Validation et publication
+`main` est la seule branche de production. Workers Builds exécute la construction, puis `npx wrangler deploy`, pour cette branche. Pour les autres branches, il exécute la même construction puis `npx wrangler preview`, sans promouvoir cette Preview sur la production.
 
-Wrangler `4.160.0` est une dépendance de développement verrouillée dans le projet. Après installation des dépendances :
+La configuration inclut `previews: {}` : l'application ne demande aucun secret, service ni base de données de prévisualisation. Les assets `dist` et leur routage SPA restent déclarés au niveau racine ; les assets de la branche testée sont envoyés par la commande Preview. Aucun contrôle du build ne limite les branches à `main`.
+
+`workers_dev: true` conserve l'adresse de test fournie par Cloudflare. `preview_urls: false` désactive les anciennes **Version URLs** ; cela ne remplace pas les nouvelles **Worker Previews**, configurées par `previews`. Conserver la commande du formulaire `npx wrangler preview`, plutôt que `wrangler versions upload`, qui crée une version utilisant les ressources configurées pour la production.
+
+Après création, vérifier **Settings → Builds → Branch control** : production `main`, Preview builds activés. Vérifier aussi que les URL de Previews sur `workers.dev` sont disponibles dans les paramètres de l'hôte Preview ; aucun domaine personnalisé de Preview n'est nécessaire. Le journal d'un build de branche doit fournir une **Preview URL**, également visible dans l'onglet Previews et, lorsque l'intégration le permet, dans la PR.
+
+L'activation rend les Previews accessibles sur leur URL. Le dépôt reste privé. Si une branche contient un travail qui ne doit pas encore être accessible, désactiver ses builds ou protéger ses Previews dans Cloudflare avant de la pousser.
+
+## Une seule chaîne de publication
+
+GitHub Actions garde les contrôles du changelog, des types, du style, les tests unitaires, les parcours Chromium, le build et un `wrangler deploy --dry-run`. Il ne s'authentifie plus auprès de Cloudflare et ne publie ni l'ancien ni le nouveau Worker.
+
+Workers Builds est le seul éditeur des déploiements et Previews. Ses builds sont indépendants de GitHub Actions : Cloudflare n'attend pas automatiquement le résultat du runner. Le build Cloudflare inclut donc `npm run check`. Les parcours navigateur restent validés sur le runner avant intégration selon le flux `feature/* → dev → main`. Configurer les protections GitHub si l'on veut imposer ces contrôles avant fusion.
+
+Les anciens secrets Actions `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` et la variable `CLOUDFLARE_WORKERS_SUBDOMAIN` ne sont plus utilisés par le workflow. Leur suppression ou révocation est une opération de compte séparée : ne révoquer un jeton qu'après avoir vérifié qu'aucun autre usage n'en dépend. Le script qui créait le sous-domaine du compte est retiré ; Workers Builds gère sa propre authentification.
+
+Pour une validation locale sans publication :
 
 ```bash
+npm ci
+npm run check
 npm run build
 npm run hosting:check
+npx wrangler preview --help
 ```
 
-`hosting:check` teste les garde-fous de l’enregistrement du sous-domaine, puis exécute `wrangler deploy --dry-run` : il vérifie la préparation du déploiement sans publier et sans valider les droits du compte distant.
+`hosting:check` vérifie la configuration et prépare le bundle avec `wrangler deploy --dry-run`. Il ne vérifie ni les droits du compte, ni la disponibilité du nom, ni un déploiement distant. `hosting:deploy` et `hosting:preview` sont de vraies publications : ne pas les exécuter pour cette simple préparation.
 
-Dans GitHub Actions, le job du runner `branchlab` exécute les contrôles de code, les tests unitaires, les parcours navigateur, la construction et ce contrôle d’hébergement. L’étape `hosting:deploy` ne s’exécute qu’après leur réussite, pour un **push sur `main`**. Un push sur `feature/*`, sur `dev` ou une demande de fusion ne publie rien. Un nouveau push sur `main` n’annule pas une publication déjà en cours.
+## Vérifier le nouveau Worker avant le domaine
 
-La première mise en ligne suit donc le parcours habituel : validation dans `dev`, préparation de release, fusion dans `main`, puis CI et déploiement. Vérifier la réussite de l’étape Cloudflare et ouvrir l’URL qu’elle renvoie avant d’annoncer la publication. Conserver cette URL comme adresse officielle une fois confirmée.
+1. Créer le nouveau Worker avec le formulaire ci-dessus et attendre la réussite de son premier build sur `main`.
+2. Ouvrir l'URL HTTPS `workers.dev` effectivement renvoyée par Cloudflare. Ne pas déduire le sous-domaine du compte à partir du nom du projet.
+3. Ouvrir `/version.json` sur cette URL : `commit` doit correspondre au SHA de `main` construit et `branch` doit être `main`. Le champ `version` reste la version applicative de la branche, sans augmentation pour cette seule migration d'infrastructure.
+4. Vérifier le chargement des assets, les diagnostics, la sauvegarde locale, l'export/import JSON, puis une actualisation normale et une navigation directe vers une URL SPA. Vérifier également une Preview de branche et son `version.json`.
+5. Ne pas considérer les sauvegardes du domaine public comme perdues parce que la nouvelle URL de test ne les affiche pas : IndexedDB est isolée par origine. Ne pas supprimer les données du navigateur.
 
-La CI ajoute un fichier public `/version.json` contenant le commit et la branche de la construction. Comparer ces valeurs au commit validé de `main` pour vérifier précisément la version servie.
+Chaque `npm run build` produit désormais `dist/version.json`, aussi bien depuis Workers Builds que GitHub Actions. Les variables Cloudflare `WORKERS_CI_COMMIT_SHA` et `WORKERS_CI_BRANCH` sont prioritaires ; les variables GitHub puis le checkout Git servent de repli pour les validations locales. Aucun horodatage variable n'est ajouté au fichier.
 
-Pour une intervention manuelle autorisée, `npm run hosting:deploy` prépare le sous-domaine puis envoie le dossier `dist` courant ; il suppose que les contrôles et la construction ont déjà été exécutés et que les variables `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` et `CLOUDFLARE_WORKERS_SUBDOMAIN` sont disponibles. La CI reste le chemin normal de publication.
+BranchLab ne déclare pas de Service Worker, de manifeste PWA, de précache ni de redirection `_redirects`. Le problème de précache d'une réponse redirigée `/index.html → /` ne s'applique donc pas à cette version. Le routage `single-page-application` et le traitement HTML de Cloudflare sont conservés ; aucun changement applicatif de cache n'est nécessaire.
 
-## Publicités ultérieures
+## Transférer le domaine quand la validation est terminée
 
-Cette préparation n’ajoute aucune publicité. L’application statique peut recevoir plus tard des scripts publicitaires et un fichier `ads.txt` sans changer d’hébergeur.
+Cette étape est distincte de la création et doit être réalisée lorsque l'utilisateur est prêt.
 
-La lecture des [conditions Cloudflare](https://www.cloudflare.com/terms/) n’a pas identifié de restriction générale réservant cette offre aux projets non commerciaux. Cela ne vaut pas acceptation automatique par une régie publicitaire : par exemple, Google examine séparément l’éligibilité du site à AdSense. [Critères AdSense](https://support.google.com/adsense/answer/9724?hl=fr).
+1. Relever dans l'ancien Worker l'association actuelle de `branchlab.siniverse.cc` et conserver l'ancien Worker, sa dernière version et sa configuration pour un retour arrière. Exporter un setup depuis le domaine public constitue une sauvegarde indépendante supplémentaire.
+2. Dans le nouveau Worker, ouvrir **Settings → Domains & Routes → Add → Custom Domain** et saisir `branchlab.siniverse.cc`. Si Cloudflare refuse parce que le domaine appartient déjà à l'ancien Worker, retirer uniquement cette association de l'ancien, puis l'ajouter au nouveau. Prévoir une courte interruption possible entre ces opérations.
+3. Laisser Cloudflare gérer l'enregistrement DNS et le certificat du Custom Domain. Ne pas créer un CNAME manuel vers `workers.dev`.
+4. Attendre le statut actif, ouvrir `https://branchlab.siniverse.cc/version.json`, comparer le SHA à celui du nouveau Worker et refaire le chargement, l'actualisation et la sauvegarde. L'origine publique reste identique : les données IndexedDB existantes restent liées à cette origine.
+5. En cas d'échec, réassocier le domaine à l'ancien Worker et vérifier son état. Supprimer l'ancien Worker seulement après une période de validation choisie par l'utilisateur.
 
-Prévoir un domaine propre au moment de la monétisation, puis adapter l’intégration et les informations destinées aux visiteurs aux exigences de la régie retenue. Aucun compte publicitaire ni consentement publicitaire n’est configuré à ce stade.
+## Références
+
+- [Configurer Workers Builds et ses commandes](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/)
+- [Choisir la branche de production et les Preview builds](https://developers.cloudflare.com/workers/ci-cd/builds/build-branches/)
+- [Versions de Node, npm et installation des dépendances](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/)
+- [Configurer les nouvelles Worker Previews](https://developers.cloudflare.com/workers/previews/configuration/)
+- [Créer une Preview et version minimale de Wrangler](https://developers.cloudflare.com/workers/previews/get-started/)
+- [Custom Domains Workers](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/)
+- [Coût des fichiers statiques](https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/)
+
+Le site reste statique, sans API d'IA, compte utilisateur, base de données ou publicité. L'instance LAN continue à suivre `dev` avec ses services séparés.
