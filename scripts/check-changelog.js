@@ -210,7 +210,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     const args = process.argv.slice(2);
     if (args.length !== 0 && !(args.length === 2 && args[0] === '--base' && args[1]))
       throw new Error('Usage : node scripts/check-changelog.js [--base <référence Git>]');
-    const result = checkChangelog({ base: args.length ? args[1] : undefined });
+    const result = checkChangelog({
+      base: args.length ? args[1] : process.env.SINIVERSE_BASE_SHA || undefined,
+    });
     process.stdout.write(`Changelog valide : v${result.version} (${result.count} versions).\n`);
   } catch (error) {
     process.stderr.write(`${error.message}\n`);

@@ -55,19 +55,19 @@ Les protections de branches et l’obligation de revue ne sont pas imposées par
 
 La publication est préparée pour **Cloudflare Workers Static Assets**, en servant uniquement le dossier `dist/`. Aucun code serveur, base de données ou abonnement payant n’est nécessaire pour cette version. Le choix de l’hébergement laisse possible l’ajout de publicités plus tard ; aucune publicité n’est intégrée aujourd’hui.
 
-Le Worker existant `siniverse-branchlab-site` sert `branchlab.siniverse.cc`. GitHub Actions prend en charge la publication après validation ; laisser l'automatisation Workers Builds désactivée pour éviter deux chaînes concurrentes. `wrangler.jsonc` conserve le domaine public et la base de Preview `dev.branchlab.siniverse.cc`. La Preview nommée `dev` se trouve à `dev.dev.branchlab.siniverse.cc`. Les deux secrets nécessaires et le lancement manuel optionnel sont décrits dans la procédure ci-dessous. L'instance LAN reste indépendante et suit toujours `dev`.
+Le Worker existant `siniverse-branchlab-site` sert `branchlab.siniverse.cc`. GitHub Actions prend en charge la publication après validation ; laisser l'automatisation Workers Builds désactivée pour éviter deux chaînes concurrentes. Les domaines sont gérés au dashboard Cloudflare, sans routes déclaratives dans Wrangler. La Preview nommée `dev` se trouve à `dev.branchlab.siniverse.cc`. Les deux secrets nécessaires et le lancement manuel optionnel sont décrits dans la procédure ci-dessous. L'instance LAN reste indépendante et suit toujours `dev`.
 
 Voir [la configuration Cloudflare, les limites de l’offre gratuite et la connexion du compte](docs/hosting.md).
 
 ### Runners GitHub hébergés
 
-La CI utilise `ubuntu-24.04` standard, Node et npm épinglés, puis installe Chromium et ses dépendances Linux. Aucun job ne dépend du runner privé ; son arrêt ne bloque pas cette chaîne. Le workflow ne publie et ne stocke aucun artefact Actions persistant, et n'active pas de cache Actions.
+Le workflow `CI` appelle le réutilisable de `sinikebe/siniverse` à un SHA immuable, avec le même caller que les autres applications. Son job de contrôle et publication utilise `ubuntu-24.04` standard, Node `24.22.2`, npm `11.19.1` et Wrangler `4.161.0`, puis installe Chromium avant `npm run ci:check`. `npm run ci:build` conserve la construction existante. Aucun job ne dépend du runner privé ; aucun cache ou artefact Actions persistant n'est demandé, et le même `dist/` est validé puis publié.
 
-Les tests CI utilisent uniquement `127.0.0.1:5177`, via `BRANCHLAB_E2E_PORT`, avec deux processus navigateur. Les tests locaux et l'actualisation LAN conservent leur port `5175`. Chaque test démarre son propre serveur.
+Les tests utilisent par défaut `127.0.0.1:5175`, avec deux processus navigateur en CI. `BRANCHLAB_E2E_PORT` permet de choisir un autre port. Chaque exécution démarre son propre serveur.
 
 Les validations anciennes peuvent être annulées. Les publications sont sérialisées par branche et vérifient à nouveau la tête Git juste avant Wrangler ; une publication en cours n'est pas annulée par le push suivant.
 
-Un lancement manuel `workflow_dispatch` valide uniquement par défaut. L'option `deploy=true` publie après contrôle sur `main` ou `dev`, avec les mêmes gardes de dépôt public, compte, SHA et secrets que les push. Voir [la procédure complète](docs/hosting.md).
+Un lancement manuel `workflow_dispatch` valide uniquement par défaut. L'option `deploy=true` publie après contrôle sur `main` ou `dev`, avec les mêmes gardes de dépôt public, compte, SHA et secrets que les push. Les PR sont contrôlées sans credentials Cloudflare. La preuve commune est `deployment.json` ; `version.json` et le changelog applicatif sont conservés. Voir [la procédure complète](docs/hosting.md).
 
 ## Instance de développement sur le réseau local
 
