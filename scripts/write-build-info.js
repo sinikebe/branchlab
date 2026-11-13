@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { resolveVersion } from '../src/version.ts';
 
 function readGit(args) {
   try {
@@ -20,7 +21,7 @@ function validCommit(value) {
 
 export function createBuildInfo({ version, env = process.env, git = readGit }) {
   return {
-    version,
+    version: resolveVersion(env.SINIVERSE_VERSION, version),
     commit:
       validCommit(env.SINIVERSE_SHA) ||
       validCommit(env.WORKERS_CI_COMMIT_SHA) ||

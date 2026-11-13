@@ -1,45 +1,52 @@
 # Versions et historique utilisateur
 
-La version affichée en bas de page provient de `package.json`. Le changelog affiché dans l’application provient de `src/changelog.json`. Ces informations font partie de la même construction : elles ne dépendent pas d’une requête réseau ou du nom de la branche.
+La numérotation active commence à **0.0.1 le 13 novembre 2026**. Les fonctionnalités et données de la version précédemment publiée 0.4.1 sont conservées. Les numéros de l'ancienne période restent inchangés.
 
-La première version visible dans l’interface est **0.2.0**. L’entrée **0.1.0** regroupe les fonctions de la première application publiée, dont le paquet portait auparavant la version `0.1.0-dev`. Cette numérotation de l’historique ne prétend pas qu’un numéro était déjà affiché dans cette ancienne interface.
+## Circuit d'intégration
 
-## Préparer une version
+Toutes les PR de travail ciblent `dev`. Les agents peuvent y fusionner après revue et CI verte, puis vérifier la Preview, sans demander un nouvel accord. Le propriétaire teste cette Preview avant la promotion : `main` accepte uniquement une PR depuis `dev` du même dépôt, puis sa fusion attend l'accord explicite du propriétaire. Les évolutions de version sont donc éprouvées dans `dev` avant leur publication en production. Les branches permanentes sont conservées ; aucune avance de `dev` depuis `main` ne remplace ce circuit.
 
-Les versions suivent le format stable `major.minor.patch`, sans suffixe de branche ou de construction. Les règles ci-dessous s’appliquent aux prochaines modifications : la version **0.3.0** et les anciennes entrées gardent leur numéro.
+## Version attribuée par la CI commune
 
-- **Contenu uniquement** : augmenter le correctif de un (`0.3.0` → `0.3.1`). Cela couvre les ajouts ou corrections de catalogue matériel, de caractéristiques, de sources et de textes, tant que l’interface ne change pas.
-- **Changement d’interface** : augmenter le numéro mineur de un et remettre le correctif à zéro (`0.3.2` → `0.4.0`). Cette règle s’applique aussi à une modification mêlant interface et contenu.
-- **Correction de logique sans changement d’interface** : augmenter le correctif de un.
-- **Rupture majeure de comportement ou de format** : prendre une décision explicite sur le numéro majeur.
-- **Documentation, infrastructure ou fusion uniquement** : conserver la version utilisateur.
+Le job de confiance du réutilisable `sinikebe/siniverse` gère exclusivement le calcul et les tags annotés immuables :
 
-Avant de fusionner la fonctionnalité dans `dev` :
+- `siniverse-version/main/vX.Y.Z` pour la production ;
+- `siniverse-version/dev/vX.Y.Z` pour le développement.
 
-1. Mettre à jour les deux manifestes avec `npm version <version> --no-git-tag-version`.
-2. Ajouter une entrée **en tête** de `src/changelog.json`, avec cette version, une date réelle `AAAA-MM-JJ` et une à six notes de 220 caractères maximum chacune.
-3. Rédiger en français ce que l’utilisateur peut faire, ce qui s’améliore ou le problème qui est corrigé. Garder des phrases courtes. Ne pas mentionner les serveurs, CI, runners, déploiements, clés SSH, bibliothèques, commits ou autres détails d’infrastructure.
-4. Conserver les anciennes entrées, leur date et leur texte. Plusieurs versions peuvent être intégrées dans `dev` avant une publication de `main`.
-5. Lancer `npm run check` et vérifier le bas de page et le changelog dans le navigateur.
+Le premier tag de `dev` vaut `0.0.1`. Le premier tag de `main` reprend la version effectivement testée sur `dev` : `0.0.1` au démarrage, ou un numéro supérieur si des corrections ont déjà été testées avant la première production. Ensuite, le correctif augmente par défaut : utiliser `fix: ...` pour une correction compatible et `feat: ...` pour un ajout compatible (minor). Un titre `feat!: ...`/`fix!: ...` ou une mention `BREAKING CHANGE:` indique une rupture (major). Choisir selon l'effet réel du changement ; l'ancienne distinction interface/contenu ne décide plus du numéro. Un unique label `semver:major`, `semver:minor` ou `semver:patch` peut exprimer explicitement l'impact. La promotion de `dev` vers `main` ne double pas l'incrément et le rejeu d'un même commit réutilise sa version. Ces règles appartiennent au central : aucun contrôleur de bump ou commit de version supplémentaire n'est créé dans BranchLab.
 
-Exemple de note utilisateur : « Comparez les débits avec et sans compression pour votre écran. » Une description comme « Ajout d’une fonction de calcul dans le moteur TypeScript » appartient à la description technique du changement, pas au changelog utilisateur.
+`package.json` et les deux versions de `package-lock.json` restent à `0.0.1` comme valeur locale de secours. Ne plus lancer `npm version` pour préparer une publication. Décrire correctement la nature de la PR et ajouter les notes utilisateur nécessaires ; le workflow choisit le numéro.
 
-La même version suit ensuite la modification de sa branche vers `dev`, puis vers `main`. Une correction en cours sur une branche de fonctionnalité peut compléter son entrée tant qu’elle ne fait pas encore partie de la base de comparaison. Une fusion ou un changement portant seulement sur la documentation ou l’infrastructure ne crée pas artificiellement une nouvelle version utilisateur.
+## Version affichée et preuve de build
 
-## Vérifications automatiques
+La CI fournit `SINIVERSE_VERSION`, au format strict `major.minor.patch`, sans préfixe `v`. Vite l'intègre au bundle. Le pied de page, le libellé « Nouveautés de la version… » et l'en-tête du changelog utilisent cette même version. `scripts/write-build-info.js` utilise le même adaptateur pour `dist/version.json` ; le manifeste central `deployment.json` conserve la preuve de publication.
 
-`npm run changelog:check` vérifie :
+Sans injection, le serveur local et le build utilisent `package.json`, donc `0.0.1`. La version est disponible hors ligne, sans fetch au runtime. Exemple de vérification d'une version injectée :
 
-- la présence et la structure de chaque entrée, ses notes courtes et sa date calendaire ;
-- l’unicité et l’ordre décroissant des versions et des dates ;
-- l’égalité entre la dernière entrée, `package.json` et les deux champs de version de `package-lock.json`.
+```bash
+SINIVERSE_VERSION=1.2.3 npm run ci:build
+```
 
-Cette vérification s’exécute dans `npm run check` et avant la construction. Elle fonctionne sans historique Git, notamment sur une copie du projet.
+Sous PowerShell : `$env:SINIVERSE_VERSION='1.2.3'; npm run ci:build`. Cette commande construit uniquement des fichiers locaux et ne réserve aucun tag.
 
-Avant d’activer une mise à jour locale, le serveur vérifie également le changelog par rapport à la révision actuellement servie. Si ce contrôle échoue, la version précédente reste accessible.
+## Notes éditoriales actuelles
 
-La variante `npm run changelog:check -- --base <référence Git>` compare également le travail à une version connue. Elle refuse la suppression ou la réécriture d’anciennes entrées et exige une nouvelle version si le code de l’application change (`src/` hors tests et changelog, `public/`, `index.html`) ou si les dépendances d’exécution déclarées changent. Les changements de tests, documentation et outils de développement n’exigent pas à eux seuls une version. Les changements non suivis dans `src/` et `public/` sont aussi pris en compte localement.
+`src/changelog.json` contient des entrées `{ "date": "AAAA-MM-JJ", "changes": [...] }`, sans numéro de version. Les notes ne sont pas générées automatiquement pour chaque incrément CI. Un changement de catalogue, de contenu, d'interface, de logique ou de dépendance d'exécution exige toujours une nouvelle note utile à l'utilisateur.
 
-Pour une branche de fonctionnalité, prendre comme référence son ancêtre commun avec `dev`, afin de ne pas demander une version différente à chaque commit intermédiaire. Pour une demande de fusion, utiliser la branche cible ; pour une mise à jour de `dev` ou de `main`, utiliser la révision précédente. L’historique de la référence doit avoir été récupéré : une référence absente provoque un échec, jamais une validation silencieuse. L’introduction initiale du changelog est autorisée lorsqu’il n’existait pas dans la base.
+Ajouter les entrées en tête et conserver les notes déjà intégrées. Les dates suivent l'ordre décroissant ; plusieurs entrées distinctes d'une même journée sont possibles. Chaque entrée contient une à six notes en français, de 220 caractères maximum chacune. Expliquer le bénéfice ou la correction visible ; les détails de CI, dépendances, commits et hébergement restent dans les descriptions techniques.
 
-Le contrôle automatique vérifie la cohérence des versions et préserve l’historique. La distinction entre contenu seul et changement d’interface se fait à la relecture, selon l’effet réel du changement, pas d’après le nom des fichiers : un même composant peut contenir du texte et de l’interface. Le contrôle ne peut pas non plus juger automatiquement qu’une phrase est utile ou exempte de jargon ; la relecture du texte utilisateur reste nécessaire. Les dépendances transitives modifiées uniquement dans le verrou ne sont pas interprétées automatiquement comme une nouvelle fonctionnalité : décider du numéro et de la note selon leur effet réel sur l’application.
+La version actuelle du badge vient du build et ne dépend jamais du contenu de ces notes.
+
+## Ancienne numérotation archivée
+
+`src/changelog-archive.json` conserve exactement le fichier précédemment publié, de 0.1.0 à 0.4.1 : numéros, dates et textes ne changent pas. Cette archive reste consultable dans la fenêtre « Nouveautés » sous « Historique de la numérotation précédente ».
+
+Elle est exclue de l'ordre des notes actuelles et des comparaisons SemVer du nouveau cycle. Un ancien numéro égal à un futur numéro CI ne désigne donc pas la même release. Ne pas déplacer les entrées archivées dans le changelog actif ni attribuer le badge courant à l'archive.
+
+## Contrôles
+
+`npm run changelog:check` valide la structure et la qualité des notes, l'archive et la cohérence du repli package/lock. Il n'exige aucune égalité entre les notes et la version injectée par CI.
+
+`npm run changelog:check -- --base <référence Git>` protège les notes et l'archive déjà intégrées, et exige une note pour un changement fonctionnel. `SINIVERSE_BASE_SHA` fournit la base de CI ; `--base` explicite reste prioritaire. La transition initiale vérifie l'archivage de l'ancien historique et le repli 0.0.1. Une base absente provoque un échec explicite.
+
+`npm run check` conserve les tests du catalogue, du moteur, du stockage et des imports. Les parcours Playwright vérifient aussi le pied de page, les notes hors ligne et l'accès à l'archive. Les scripts et services LAN restent inchangés.
