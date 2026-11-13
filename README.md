@@ -43,11 +43,11 @@ Le brouillon est sauvegardé dans IndexedDB sur ce navigateur. Effacer les donn�
 ## Branches et validation
 
 - Une fonctionnalité se développe dans `feature/<nom>`.
-- Après validation, elle est fusionnée dans `dev` et envoyée vers le dépôt privé.
+- Après validation, elle est fusionnée dans `dev` et envoyée vers le dépôt.
 - Une fois la fusion validée et le travail terminé, supprimer la branche de fonctionnalité localement et sur `origin`, après vérification que tous ses commits sont intégrés à `dev`. Conserver `dev`, `main` et les branches non fusionnées.
 - L’instance de développement du réseau local suit uniquement `origin/dev`.
 - Une release est préparée et fusionnée séparément dans `main` ; aucune release automatique n’est créée.
-- GitHub Actions vérifie les branches de fonctionnalité, `dev`, `main` et les demandes de fusion avec le runner self-hosted de ce serveur, sans publier. Workers Builds publie `main` et crée des Previews pour les autres branches.
+- GitHub Actions valide les PR vers `dev` et `main`, ainsi que les push sur ces branches, avec des runners hébergés standards. Les jobs sont bloqués tant que le dépôt n'est pas public. Après validation, `main` publie la production et `dev` sa Preview ; les PR ne reçoivent aucun secret et ne publient pas.
 
 Les protections de branches et l’obligation de revue ne sont pas imposées par les fichiers de workflow : elles se configurent dans les paramètres GitHub.
 
@@ -55,28 +55,19 @@ Les protections de branches et l’obligation de revue ne sont pas imposées par
 
 La publication est préparée pour **Cloudflare Workers Static Assets**, en servant uniquement le dossier `dist/`. Aucun code serveur, base de données ou abonnement payant n’est nécessaire pour cette version. Le choix de l’hébergement laisse possible l’ajout de publicités plus tard ; aucune publicité n’est intégrée aujourd’hui.
 
-Le Worker `siniverse-branchlab-site`, connecté à GitHub avec Workers Builds, sert désormais `branchlab.siniverse.cc`. Ce Custom Domain de production est déclaré dans `wrangler.jsonc`, et les Previews sont accessibles sur leurs URL `workers.dev`. L'utilisateur a supprimé l'ancien Worker `app` après le transfert. GitHub Actions reste une CI de validation sans secrets Cloudflare. Le dépôt reste privé et l’instance LAN suit toujours `dev`. Les paramètres de build et les vérifications sont décrits dans la procédure ci-dessous.
+Le Worker existant `siniverse-branchlab-site` sert `branchlab.siniverse.cc`. GitHub Actions prend en charge la publication après validation ; laisser l'automatisation Workers Builds désactivée pour éviter deux chaînes concurrentes. `wrangler.jsonc` conserve le domaine public et la base de Preview `dev.branchlab.siniverse.cc`. La Preview nommée `dev` se trouve à `dev.dev.branchlab.siniverse.cc`. Les deux secrets nécessaires et le lancement manuel optionnel sont décrits dans la procédure ci-dessous. L'instance LAN reste indépendante et suit toujours `dev`.
 
 Voir [la configuration Cloudflare, les limites de l’offre gratuite et la connexion du compte](docs/hosting.md).
 
-### Runner CI sur le serveur de développement
+### Runners GitHub hébergés
 
-Le workflow utilise les labels `[self-hosted, Linux, X64]`, présents sur le runner `branchlab` enregistré pour ce dépôt. Son service `actions.runner.sinikebe-branchlab.branchlab.service` démarre automatiquement et s’exécute avec le compte `ci-runner`, dans `/home/ci-runner/actions-runner`. Son checkout sous `_work` est séparé du dépôt de travail et de `/root/branchlab-dev`.
+La CI utilise `ubuntu-24.04` standard, Node et npm épinglés, puis installe Chromium et ses dépendances Linux. Aucun job ne dépend du runner privé ; son arrêt ne bloque pas cette chaîne. Le workflow ne publie et ne stocke aucun artefact Actions persistant, et n'active pas de cache Actions.
 
-La CI installe la version Node indiquée dans `.node-version`, la version npm indiquée dans `packageManager`, les dépendances verrouillées et Chromium dans le cache du compte runner, puis lance les mêmes contrôles, parcours navigateur et construction. Les bibliothèques système de Chromium sont déjà installées sur cette machine ; sur un nouveau serveur, un administrateur doit les préparer avec `npx playwright install-deps chromium`. Les tâches CI n’ont pas besoin de droits administrateur.
+Les tests CI utilisent uniquement `127.0.0.1:5177`, via `BRANCHLAB_E2E_PORT`, avec deux processus navigateur. Les tests locaux et l'actualisation LAN conservent leur port `5175`. Chaque test démarre son propre serveur.
 
-Les tests de la CI utilisent uniquement `127.0.0.1:5177`, via `BRANCHLAB_E2E_PORT`. Les tests locaux et ceux de la mise à jour automatique gardent le port `5175` par défaut. Chaque exécution démarre son propre serveur et échoue si son port est occupé, afin de ne jamais valider un autre checkout. La CI limite les tests navigateur à deux processus et annule les validations périmées d’une même branche. Les publications sont gérées séparément par Workers Builds. Le serveur LAN sur le port `5173` continue à servir la dernière version validée.
+Les validations anciennes peuvent être annulées. Les publications sont sérialisées par branche et vérifient à nouveau la tête Git juste avant Wrangler ; une publication en cours n'est pas annulée par le push suivant.
 
-Les captures et traces navigateur sont enregistrées dans `test-results/` du checkout concerné, avec un dossier par test ; aucun fichier partagé dans `/tmp` n’est utilisé.
-
-Vérifier l’état du runner :
-
-```bash
-systemctl status actions.runner.sinikebe-branchlab.branchlab.service
-journalctl -u actions.runner.sinikebe-branchlab.branchlab.service -n 40 --no-pager
-```
-
-Références : [routage des tâches vers les runners self-hosted](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/use-in-a-workflow), [Playwright en CI](https://playwright.dev/docs/ci).
+Un lancement manuel `workflow_dispatch` valide uniquement par défaut. L'option `deploy=true` publie après contrôle sur `main` ou `dev`, avec les mêmes gardes de dépôt public, compte, SHA et secrets que les push. Voir [la procédure complète](docs/hosting.md).
 
 ## Instance de développement sur le réseau local
 
