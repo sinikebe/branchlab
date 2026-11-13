@@ -1,6 +1,6 @@
 # Versions et historique utilisateur
 
-La numérotation repart à **0.0.1 le 13 novembre 2026**, sur demande explicite du propriétaire. Les fonctionnalités et données de la version précédemment publiée 0.4.1 sont conservées. Le reset ne renumérote pas rétroactivement les anciennes releases.
+La numérotation active commence à **0.0.1 le 13 novembre 2026**. Les fonctionnalités et données de la version précédemment publiée 0.4.1 sont conservées. Les numéros de l'ancienne période restent inchangés.
 
 ## Version attribuée par la CI commune
 

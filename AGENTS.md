@@ -4,7 +4,7 @@ Application statique en français, sans compte. Les informations matérielles et
 
 ## Version et changelog utilisateur
 
-La nouvelle numérotation repart à **0.0.1** sur instruction explicite du propriétaire. Les fonctionnalités publiées en 0.4.1 sont conservées. Cette décision remplace les anciennes règles de bump manuel et de conservation du numéro 0.3.0.
+La numérotation active commence à **0.0.1**. Les fonctionnalités publiées en 0.4.1 sont conservées. Les versions de publication sont attribuées par la CI ; les anciennes règles de bump manuel et le critère interface/contenu ne s'appliquent plus.
 
 - La CI centrale attribue les versions par canal avec les tags annotés immuables `siniverse-version/main/vX.Y.Z` et `siniverse-version/dev/vX.Y.Z`. Ne pas écrire de contrôleur local ni créer de commit de bump.
 - Le premier numéro de chaque canal est 0.0.1. Choisir le titre de PR selon le changement réel : `fix: ...` pour une correction compatible (patch), `feat: ...` pour un ajout compatible (minor), `feat!: ...`/`fix!: ...` ou une mention `BREAKING CHANGE:` pour une rupture (major). La maintenance et les autres changements prennent patch par défaut. Ce choix remplace l'ancien critère interface/contenu propre à BranchLab.
