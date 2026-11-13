@@ -28,7 +28,9 @@ La commande `check` vérifie la version et le changelog, puis exécute les contr
 
 Le bas de page affiche la version de l’application et un bouton « Nouveautés ». L’historique présente des notes courtes en français, centrées sur ce qui change pour l’utilisateur. Il ne contient pas de détails de déploiement ou d’infrastructure.
 
-La version provient de `package.json` et les notes de `src/changelog.json`. Elles sont intégrées ensemble à la construction, sans requête réseau supplémentaire. Une évolution utilisateur doit augmenter la version et ajouter son entrée avant fusion dans `dev` ; la publication dans `main` conserve ces mêmes notes. Les contrôles bloquent une version sans notes ou un changement de l’application qui n’a pas été versionné. Voir [la procédure de versionnement](docs/versioning.md).
+La numérotation repart à `0.0.1`, sans retirer les fonctionnalités déjà publiées en `0.4.1`. La CI commune attribue les versions après fusion dans `main` et `dev`, puis injecte `SINIVERSE_VERSION` à la construction. `package.json` et son lockfile restent à `0.0.1` comme repli local ; aucune requête réseau n'est nécessaire pour afficher la version.
+
+Les notes de `src/changelog.json` sont datées et indépendantes des incréments automatiques. Un changement fonctionnel exige toujours une nouvelle note utilisateur. L'historique précédent est conservé intégralement dans `src/changelog-archive.json` et reste consultable dans « Nouveautés », sous l'ancienne numérotation. Voir [la procédure de versionnement](docs/versioning.md).
 
 ## Utiliser la première version
 
@@ -44,10 +46,10 @@ Le brouillon est sauvegardé dans IndexedDB sur ce navigateur. Effacer les donn�
 ## Branches et validation
 
 - Une fonctionnalité se développe dans `feature/<nom>`.
-- Après validation, elle est fusionnée dans `dev` et envoyée vers le dépôt.
+- Toutes les PR de travail ciblent `dev`. Après revue et CI verte, la fusion dans `dev` ne nécessite pas d'accord supplémentaire du propriétaire.
 - Une fois la fusion validée et le travail terminé, supprimer la branche de fonctionnalité localement et sur `origin`, après vérification que tous ses commits sont intégrés à `dev`. Conserver `dev`, `main` et les branches non fusionnées.
 - L’instance de développement du réseau local suit uniquement `origin/dev`.
-- Une release est préparée et fusionnée séparément dans `main` ; aucune release automatique n’est créée.
+- Une promotion est préparée uniquement par une PR `dev` → `main`, après test de la Preview par le propriétaire et son accord explicite. `main` reste inchangée jusqu'à cet accord ; aucune avance de `dev` depuis `main` ne contourne ce circuit.
 - GitHub Actions valide les PR vers `dev` et `main`, ainsi que les push sur ces branches, avec des runners hébergés standards. Les jobs sont bloqués tant que le dépôt n'est pas public. Après validation, `main` publie la production et `dev` sa Preview ; les PR ne reçoivent aucun secret et ne publient pas.
 
 Les protections de branches et l’obligation de revue ne sont pas imposées par les fichiers de workflow : elles se configurent dans les paramètres GitHub.

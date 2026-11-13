@@ -12,10 +12,13 @@ Le Worker existant reste `siniverse-branchlab-site`, sur le compte `bbc234170943
 | --- | --- | --- |
 | Push sur `main` | Contrôles, Chromium, build, dry-run | Production |
 | Push sur `dev` | Mêmes contrôles | Preview stable nommée `dev` |
-| PR vers `main` ou `dev`, interne ou externe | Mêmes contrôles sans credentials Cloudflare | Aucune |
+| PR de travail vers `dev`, interne ou externe | Mêmes contrôles sans credentials Cloudflare | Aucune |
+| PR `dev` → `main` du même dépôt | Mêmes contrôles ; fusion après test et accord du propriétaire | Aucune avant fusion |
 | `workflow_dispatch`, `deploy=false` (défaut) | Mêmes contrôles | Aucune |
 | `workflow_dispatch`, `deploy=true`, branche `main` ou `dev` | Mêmes contrôles | Cible de la branche |
 | Dépôt privé ou visibilité inconnue | Job ignoré avant attribution du runner | Aucune |
+
+Toutes les modifications sont d'abord proposées à `dev`. Après revue et CI verte, les agents peuvent fusionner dans `dev` puis contrôler la Preview. Le propriétaire la teste avant de donner son accord explicite à la fusion d'une PR `dev` → `main`. `main` reste inchangée jusqu'à cet accord.
 
 Utiliser les exécutions normales des PR et des fusions. Le lancement manuel **Actions → CI → Run workflow** sert à une vérification ou une publication explicitement demandée ; `deploy` reste décoché par défaut. Une publication manuelle sur une autre branche est refusée. Aucune Preview n'est créée pour une PR.
 
@@ -38,7 +41,7 @@ Le contrôleur ajoute `dist/deployment.json`, vérifie son contrat avant Wrangle
 
 L'événement `pull_request.closed` n'exécute pas les vérifications applicatives. Un job central distinct, sans secret Cloudflare, reçoit seulement `contents: write` et `pull-requests: read` pour nettoyer la source d'une PR réellement fusionnée dans le même dépôt public. Il n'exécute aucun code de PR et utilise uniquement les outils centraux épinglés.
 
-Le contrôleur relit les métadonnées du dépôt, de la PR, de la branche et de sa ref ; il conserve les forks, `main`, `dev`, la branche par défaut et les branches protégées. La suppression Git exige atomiquement le SHA exact de la PR via `--force-with-lease` : une branche qui reçoit de nouveaux commits est conservée. Une branche déjà absente est explicitement ignorée. Les autres jobs conservent `contents: read`.
+Le contrôleur relit les métadonnées du dépôt, de la PR, de la branche et de sa ref ; il conserve les forks, `main`, `dev`, la branche par défaut et les branches protégées. La suppression Git exige atomiquement le SHA exact de la PR via `--force-with-lease` : une branche qui reçoit de nouveaux commits est conservée. Une branche déjà absente est explicitement ignorée. Les contrôles applicatifs conservent `contents: read` ; l'autre job central de confiance qui écrit sur GitHub est celui des tags de version, sans secret Cloudflare.
 
 ## Contrat de l'application
 
@@ -72,7 +75,7 @@ npm run hosting:check
 
 Les tests navigateur utilisent par défaut `127.0.0.1:5175` et démarrent leur propre serveur ; `BRANCHLAB_E2E_PORT` permet de choisir un autre port. Le dry-run vérifie le packaging et la configuration, sans confirmer les droits distants. `hosting:deploy` et `hosting:preview` sont de vraies publications et ne servent pas à une simple validation locale.
 
-Vérifier `https://branchlab.siniverse.cc/deployment.json` et `https://dev.branchlab.siniverse.cc/deployment.json` pour la preuve commune ; `/version.json` garde les métadonnées propres à l'application. Les versions applicatives et le changelog ne changent pas pour une évolution d'infrastructure seule.
+Vérifier `https://branchlab.siniverse.cc/deployment.json` et `https://dev.branchlab.siniverse.cc/deployment.json` pour la preuve commune ; `/version.json` garde les métadonnées propres à l'application. La version injectée `SINIVERSE_VERSION` est attribuée par les tags centraux de chaque canal ; le repli package/lock reste `0.0.1`. Les notes utilisateur restent éditoriales et indépendantes des incréments CI. Voir [les règles de versionnement](versioning.md).
 
 ## Coûts et références
 

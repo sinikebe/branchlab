@@ -63,7 +63,7 @@ import { DscSettings } from './components/DscSettings';
 import { GpuReference } from './components/GpuReference';
 import { MotherboardReference } from './components/MotherboardReference';
 import { Changelog } from './components/Changelog';
-import { version as appVersion } from '../package.json';
+import { APP_VERSION as appVersion } from './version';
 
 type EquipmentData = {
   device: Device;

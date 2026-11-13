@@ -1,8 +1,9 @@
 import { expect, test } from '@playwright/test';
 import packageMetadata from '../package.json' with { type: 'json' };
 import releases from '../src/changelog.json' with { type: 'json' };
+import archivedReleases from '../src/changelog-archive.json' with { type: 'json' };
 
-const { version } = packageMetadata;
+const version = process.env.SINIVERSE_VERSION ?? packageMetadata.version;
 
 test('version notes work offline, keep the setup and return keyboard focus to the footer', async ({
   page,
@@ -27,12 +28,6 @@ test('version notes work offline, keep the setup and return keyboard focus to th
   ).toBeVisible();
   await expect(dialog.getByText('Version actuelle', { exact: true })).toHaveCount(1);
   await expect(dialog.getByText(releases[0].changes[0], { exact: true })).toBeVisible();
-  const previous = releases[1];
-  if (previous) {
-    await expect(
-      dialog.getByRole('heading', { name: `Version ${previous.version}`, exact: true }),
-    ).toBeVisible();
-  }
   const close = dialog.getByRole('button', { name: 'Fermer', exact: true });
   await expect(close).toBeFocused();
   await page.keyboard.press('Tab');
@@ -47,6 +42,24 @@ test('version notes work offline, keep the setup and return keyboard focus to th
   await close.click();
   await expect(dialog).toHaveCount(0);
   await expect(trigger).toBeFocused();
+});
+
+test('archived notes remain accessible without mixing version epochs', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Nouveautés de la version ' + version }).click();
+  const dialog = page.getByRole('dialog', { name: 'Les nouveautés de BranchLab' });
+  const active = dialog.getByRole('list', { name: 'Historique des versions', exact: true });
+  await expect(dialog.getByRole('heading', { name: 'Version ' + version, exact: true })).toBeVisible();
+  await expect(active.getByText(releases[0].changes[0], { exact: true })).toBeVisible();
+  await expect(active.getByRole('heading', { name: 'Version 0.4.1', exact: true })).toHaveCount(0);
+  await dialog.getByText('Historique de la numérotation précédente', { exact: true }).click();
+  const archive = dialog.getByRole('list', { name: 'Ancienne numérotation', exact: true });
+  for (const release of archivedReleases) {
+    await expect(archive.getByRole('heading', { name: 'Version ' + release.version, exact: true })).toBeVisible();
+    await expect(archive.getByText(release.changes[0], { exact: true })).toBeVisible();
+  }
+  await expect(archive.getByText('Version actuelle', { exact: true })).toHaveCount(0);
+  await expect(dialog.getByText('Version actuelle', { exact: true })).toHaveCount(1);
 });
 
 test.describe('mobile changelog', () => {
