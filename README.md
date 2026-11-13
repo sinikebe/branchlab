@@ -6,7 +6,7 @@ Application statique, sans compte, sans API d’IA et sans serveur de données u
 
 ## Développement
 
-Prérequis : Node.js 24 LTS et npm.
+Prérequis : Node.js `24.22.2` (voir `.node-version`) et npm `11.19.1` (champ `packageManager` de `package.json`). Installer cette version de npm avec `npm install --global npm@11.19.1` si nécessaire.
 
 ```bash
 npm ci
@@ -48,7 +48,7 @@ Le brouillon est sauvegardé dans IndexedDB sur ce navigateur. Effacer les donn�
 - Une fois la fusion validée et le travail terminé, supprimer la branche de fonctionnalité localement et sur `origin`, après vérification que tous ses commits sont intégrés à `dev`. Conserver `dev`, `main` et les branches non fusionnées.
 - L’instance de développement du réseau local suit uniquement `origin/dev`.
 - Une release est préparée et fusionnée séparément dans `main` ; aucune release automatique n’est créée.
-- GitHub Actions vérifie les branches de fonctionnalité, `dev`, `main` et les demandes de fusion avec le runner self-hosted de ce serveur. Un envoi sur `main` publie ensuite la construction validée sur Cloudflare ; les autres branches et demandes de fusion ne publient pas.
+- GitHub Actions vérifie les branches de fonctionnalité, `dev`, `main` et les demandes de fusion avec le runner self-hosted de ce serveur, sans publier. Une fois le nouveau Worker connecté à GitHub, Workers Builds publie `main` et crée des Previews pour les autres branches.
 
 Les protections de branches et l’obligation de revue ne sont pas imposées par les fichiers de workflow : elles se configurent dans les paramètres GitHub.
 
@@ -56,7 +56,7 @@ Les protections de branches et l’obligation de revue ne sont pas imposées par
 
 La publication est préparée pour **Cloudflare Workers Static Assets**, en servant uniquement le dossier `dist/`. Aucun code serveur, base de données ou abonnement payant n’est nécessaire pour cette version. Le choix de l’hébergement laisse possible l’ajout de publicités plus tard ; aucune publicité n’est intégrée aujourd’hui.
 
-La première mise en ligne nécessite les secrets GitHub Actions `CLOUDFLARE_ACCOUNT_ID` et `CLOUDFLARE_API_TOKEN`, puis une release dans `main`. Les fichiers de configuration seuls ne créent pas le site. Le dépôt reste privé, l’instance de développement suit toujours `dev` sur le réseau local, et seules les releases de `main` sont publiées.
+Le dépôt prépare un nouveau Worker `siniverse-branchlab-site`, connecté à GitHub avec Workers Builds. GitHub Actions reste une CI de validation et n'utilise plus de secrets Cloudflare. Les fichiers de configuration seuls ne créent aucun Worker et ne déplacent pas le domaine de l'ancien Worker `app`. Le dépôt reste privé et l’instance LAN suit toujours `dev`. Les réglages exacts du formulaire, les Previews et le transfert ultérieur du domaine sont décrits dans la procédure ci-dessous.
 
 Voir [la configuration Cloudflare, les limites de l’offre gratuite et la connexion du compte](docs/hosting.md).
 
@@ -64,9 +64,9 @@ Voir [la configuration Cloudflare, les limites de l’offre gratuite et la conne
 
 Le workflow utilise les labels `[self-hosted, Linux, X64]`, présents sur le runner `branchlab` enregistré pour ce dépôt. Son service `actions.runner.sinikebe-branchlab.branchlab.service` démarre automatiquement et s’exécute avec le compte `ci-runner`, dans `/home/ci-runner/actions-runner`. Son checkout sous `_work` est séparé du dépôt de travail et de `/root/branchlab-dev`.
 
-La CI installe la version Node indiquée dans `.node-version`, les dépendances verrouillées et Chromium dans le cache du compte runner, puis lance les mêmes contrôles, parcours navigateur et construction. Les bibliothèques système de Chromium sont déjà installées sur cette machine ; sur un nouveau serveur, un administrateur doit les préparer avec `npx playwright install-deps chromium`. Les tâches CI n’ont pas besoin de droits administrateur.
+La CI installe la version Node indiquée dans `.node-version`, la version npm indiquée dans `packageManager`, les dépendances verrouillées et Chromium dans le cache du compte runner, puis lance les mêmes contrôles, parcours navigateur et construction. Les bibliothèques système de Chromium sont déjà installées sur cette machine ; sur un nouveau serveur, un administrateur doit les préparer avec `npx playwright install-deps chromium`. Les tâches CI n’ont pas besoin de droits administrateur.
 
-Les tests de la CI utilisent uniquement `127.0.0.1:5177`, via `BRANCHLAB_E2E_PORT`. Les tests locaux et ceux de la mise à jour automatique gardent le port `5175` par défaut. Chaque exécution démarre son propre serveur et échoue si son port est occupé, afin de ne jamais valider un autre checkout. La CI limite les tests navigateur à deux processus et annule les validations périmées d’une même branche, sauf sur `main` pour laisser une publication en cours se terminer. Le serveur LAN sur le port `5173` continue à servir la dernière version validée.
+Les tests de la CI utilisent uniquement `127.0.0.1:5177`, via `BRANCHLAB_E2E_PORT`. Les tests locaux et ceux de la mise à jour automatique gardent le port `5175` par défaut. Chaque exécution démarre son propre serveur et échoue si son port est occupé, afin de ne jamais valider un autre checkout. La CI limite les tests navigateur à deux processus et annule les validations périmées d’une même branche. Les publications sont gérées séparément par Workers Builds. Le serveur LAN sur le port `5173` continue à servir la dernière version validée.
 
 Les captures et traces navigateur sont enregistrées dans `test-results/` du checkout concerné, avec un dossier par test ; aucun fichier partagé dans `/tmp` n’est utilisé.
 
