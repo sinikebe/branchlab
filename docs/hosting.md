@@ -1,105 +1,87 @@
-# Hébergement de BranchLab avec GitHub
+# Publication de BranchLab depuis GitHub Actions
 
-La publication de BranchLab utilise **Cloudflare Workers Builds**, connecté au dépôt privé `sinikebe/branchlab`, sur le Worker `siniverse-branchlab-site`. Le 13 novembre 2026, l'utilisateur a confirmé le transfert de `branchlab.siniverse.cc` vers ce Worker et la suppression de l'ancien Worker `app`. Ne pas recréer l'ancien Worker.
+Le workflow `.github/workflows/ci.yml` utilise exclusivement des runners GitHub hébergés **standards `ubuntu-24.04`**. Les jobs sont bloqués avant attribution d'un runner si le dépôt n'est pas public. Aucun runner privé, larger runner, cache Actions ou stockage d'artefacts persistant n'est demandé.
 
-`wrangler.jsonc` décrit le Worker utilisé et les deux Custom Domains déjà configurés par l'utilisateur : `branchlab.siniverse.cc` pour la production et `dev.branchlab.siniverse.cc` comme base de Preview. Ces déclarations conservent les associations existantes lors des publications. Un push sur `main` peut lancer Workers Builds et publier sur ce site.
+Le Worker existant reste `siniverse-branchlab-site`, sur le compte `bbc2341709439fad81d7aebc62efb873`. Ne pas recréer de Worker et ne pas réactiver Workers Builds en parallèle : son automatisation a été désactivée séparément. Les Previews runtime restent utilisables par Wrangler sans réactiver les builds Cloudflare.
 
-## Paramètres du Worker connecté à GitHub
+## Déclenchements
 
-Le Worker est déjà créé : ouvrir **Workers & Pages → siniverse-branchlab-site → Settings → Builds** pour retrouver ces paramètres. Ne pas relancer la création ou le transfert du domaine.
+| Événement | Validation | Publication après succès |
+| --- | --- | --- |
+| Push sur `main` | Contrôles, Chromium, build, dry-run | Production |
+| Push sur `dev` | Mêmes contrôles | Preview stable nommée `dev` |
+| PR vers `main` ou `dev`, interne ou externe | Contrôles sans secrets | Aucune |
+| `workflow_dispatch`, `deploy=false` (défaut) | Contrôles | Aucune |
+| `workflow_dispatch`, `deploy=true`, branche `main` ou `dev` | Contrôles | Cible de la branche |
+| Dépôt privé ou visibilité inconnue | Jobs ignorés | Aucune |
 
-| Champ | Valeur |
+Pour lancer manuellement, ouvrir **Actions → Validate and publish BranchLab → Run workflow**, sélectionner `main` ou `dev`, puis cocher `deploy` seulement si une publication est souhaitée. Une demande de publication sur une autre branche échoue avec une indication explicite.
+
+Il n'y a pas de Preview créée pour chaque PR et donc pas de nettoyage automatique de Preview à la fermeture d'une PR. Les Previews historiques existantes ne sont pas supprimées par cette migration.
+
+## Préparation indispensable du compte
+
+1. Le propriétaire passe le dépôt GitHub en public. Le workflow ne change jamais sa visibilité et reste bloqué tant que cette condition n'est pas remplie.
+2. Dans **Settings → Secrets and variables → Actions**, ajouter les deux secrets de dépôt ci-dessous. Ne jamais copier le jeton dans un fichier suivi ou dans une conversation.
+
+| Secret | Valeur |
 | --- | --- |
-| Project name / Worker name | `siniverse-branchlab-site` |
-| Repository | `sinikebe/branchlab` |
-| Production branch | `main` |
-| Root directory | Racine du dépôt : `/` ; laisser le champ vide si c'est sa valeur par défaut |
-| Build command | `npm ci && npm run check && npm run build` |
-| Deploy command | `npx wrangler deploy` |
-| Preview command | `npx wrangler preview` |
-| Enable Preview builds | Activé |
-| Protect with Cloudflare Access | Désactivé pour cette application publique |
-| Build variable `SKIP_DEPENDENCY_INSTALL` | `1` |
-| Node.js | `24.22.2`, fourni par `.node-version` ; si une variable `NODE_VERSION` est saisie, utiliser la même valeur |
-| npm | `11.19.1`, sélectionné par `packageManager` dans `package.json` |
-| API token | Jeton créé et géré par Workers Builds pour le compte choisi |
-| Runtime variables / secrets / bindings | Aucun |
-| Assets / output directory | `dist`, déjà défini dans `wrangler.jsonc` ; aucun champ Pages à renseigner |
+| `CLOUDFLARE_ACCOUNT_ID` | `bbc2341709439fad81d7aebc62efb873` |
+| `CLOUDFLARE_API_TOKEN` | Jeton limité au compte et aux droits de publication du Worker et de ses Custom Domains existants |
 
-Le nom du projet doit correspondre exactement à `name` dans `wrangler.jsonc`. La liste `routes` conserve uniquement les deux hôtes existants :
+Le jeton ne nécessite aucun service de stockage, de calcul supplémentaire ni abonnement. Vérifier les permissions du jeton dans la [documentation Wrangler](https://developers.cloudflare.com/workers/authorization/workers/). Le workflow refuse un identifiant de compte différent de celui attendu.
+
+Si les secrets manquent, un push est validé mais sa publication est **explicitement ignorée** dans le résumé Actions. Une demande manuelle `deploy=true` échoue avec le nom des secrets absents, sans afficher leur valeur. Après ajout des secrets, lancer cette demande manuelle ou effectuer un nouveau push sur la branche concernée.
+
+Les protections GitHub et l'obligation de revue restent des réglages du dépôt. Les commandes CI ne configurent ni budget, ni moyen de paiement, ni option payante.
+
+## Construction reproductible et garde-fous
+
+Node `24.22.2` provient de `.node-version`, npm `11.19.1` de `packageManager` et Wrangler `4.160.0` du lockfile. Le workflow utilise `npm ci`, puis les contrôles existants, Chromium avec ses dépendances Linux, le build et `wrangler deploy --dry-run`.
+
+Le job de publication est séparé de la validation et reconstruit le **même SHA immuable** à partir du lockfile. Aucun artefact Actions persistant n'est nécessaire. Juste avant Wrangler, `scripts/actions-deploy.js` vérifie le dépôt public, l'événement, la branche autorisée, le SHA du checkout, le SHA/branche/version de `dist/version.json` et la tête distante de la branche. Une ancienne exécution en attente est ignorée si un nouveau commit l'a remplacée.
+
+Les publications sont sérialisées par branche avec `cancel-in-progress: false`, pour ne pas interrompre une publication en cours. Les validations périmées peuvent être annulées séparément. Les secrets Cloudflare ne sont disponibles que dans les étapes qui vérifient leur présence et exécutent la publication, jamais dans les jobs de PR ou les contrôles de l'application.
+
+`main` exécute `npx --no-install wrangler deploy`. `dev` exécute `npx --no-install wrangler preview --name dev`. Le workflow vérifie ensuite en HTTPS la version publiée, sa branche et son SHA complet. `workflow_dispatch` sans demande explicite reste une validation seule.
+
+## Domaines conservés
+
+`wrangler.jsonc` conserve exactement les deux associations existantes :
 
 | Hôte | Configuration | Usage |
 | --- | --- | --- |
 | `branchlab.siniverse.cc` | `custom_domain: true` | Production |
 | `dev.branchlab.siniverse.cc` | `custom_domain: true`, `enabled: false`, `previews_enabled: true` | Base de Preview uniquement |
 
-Le domaine public de production n'est pas activé comme hôte Preview. Aucun autre domaine ni wildcard n'est ajouté à la configuration.
+`workers_dev: true`, `preview_urls: true` et `previews: {}` restent inchangés. Les assets viennent de `dist`, avec le routage `single-page-application`. Aucun domaine, wildcard ou service supplémentaire n'est ajouté.
 
-`SKIP_DEPENDENCY_INSTALL=1` désactive l'installation automatique : la commande de build exécute elle-même `npm ci` à partir du lockfile suivi. Ne pas définir `NODE_ENV=production` pendant cette installation : TypeScript, Vite, les outils de contrôle et Wrangler sont des dépendances de développement.
+`dev.branchlab.siniverse.cc` est une **base de Preview**, pas directement la branche de développement. La Preview nommée `dev` utilise donc **https://dev.dev.branchlab.siniverse.cc**. Les autres Previews historiques conservent leur forme `<nom-preview>.dev.branchlab.siniverse.cc`.
 
-La version de Node est fixée par le fichier et celle de npm par le champ `packageManager` exact. Le champ `engines.npm` et une variable `NPM_VERSION` ne sélectionnent pas npm dans Workers Builds. Le `package-lock.json` conserve les versions et empreintes des dépendances. Wrangler `4.160.0` reste verrouillé dans ce lockfile et satisfait le minimum des nouvelles Previews.
+Conserver les deux hôtes dans la liste source : Wrangler peut remplacer la portée des Custom Domains et retirer une association manuelle absente du fichier. L'ancien Worker `app` a été supprimé par l'utilisateur ; ne pas le recréer.
 
-## Production et Previews
-
-`main` est la seule branche de production. Workers Builds exécute la construction, puis `npx wrangler deploy`, pour cette branche. Pour les autres branches, il exécute la même construction puis `npx wrangler preview`, sans promouvoir cette Preview sur la production.
-
-La configuration inclut `previews: {}` : l'application ne demande aucun secret, service ni base de données de prévisualisation. Les assets `dist` et leur routage SPA restent déclarés au niveau racine ; les assets de la branche testée sont envoyés par la commande Preview. Aucun contrôle du build ne limite les branches à `main`.
-
-`workers_dev: true` active l'adresse de production sur `workers.dev`. `preview_urls: true` active séparément les URL `workers.dev` des Previews, en complément de leur base personnalisée déjà active. Le bloc `previews: {}` définit leur configuration, mais ne suffit pas à leur fournir une URL : il faut au moins un hôte Preview activé. Sans hôte, une construction peut réussir sans URL et la PR afficher « No Preview URL ». Conserver la commande du formulaire `npx wrangler preview`, plutôt que `wrangler versions upload`, qui crée une version utilisant les ressources configurées pour la production.
-
-Vérifier **Settings → Builds → Branch control** : production `main`, Preview builds activés. Dans **Domains → Worker URL**, conserver **Preview** activé pour `workers.dev`. Dans les Custom Domains, `dev.branchlab.siniverse.cc` doit rester activé uniquement pour les Previews. Le journal d'un build de branche doit fournir une **Preview URL**, également visible dans l'onglet Previews et, lorsque l'intégration le permet, dans la PR.
-
-`dev.branchlab.siniverse.cc` est une **base de Preview**, pas une adresse stable servant directement la branche `dev`. Les URL de branche sont de la forme `<nom-preview>.dev.branchlab.siniverse.cc` ; par exemple `feature-worker-preview-urls-main.dev.branchlab.siniverse.cc`. Ce schéma existant est conservé, sans ajouter d'alias ni changer les domaines.
-
-L'activation rend les Previews accessibles sur leur URL. Le dépôt reste privé. Si une branche contient un travail qui ne doit pas encore être accessible, désactiver ses builds ou protéger ses Previews dans Cloudflare avant de la pousser.
-
-## Une seule chaîne de publication
-
-GitHub Actions garde les contrôles du changelog, des types, du style, les tests unitaires, les parcours Chromium, le build et un `wrangler deploy --dry-run`. Il ne s'authentifie plus auprès de Cloudflare et ne publie pas le Worker.
-
-Workers Builds est le seul éditeur des déploiements et Previews. Ses builds sont indépendants de GitHub Actions : Cloudflare n'attend pas automatiquement le résultat du runner. Le build Cloudflare inclut donc `npm run check`. Les parcours navigateur restent validés sur le runner avant intégration selon le flux `feature/* → dev → main`. Configurer les protections GitHub si l'on veut imposer ces contrôles avant fusion.
-
-Les anciens secrets Actions `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` et la variable `CLOUDFLARE_WORKERS_SUBDOMAIN` ne sont plus utilisés par le workflow. Leur suppression ou révocation est une opération de compte séparée : ne révoquer un jeton qu'après avoir vérifié qu'aucun autre usage n'en dépend. Le script qui créait le sous-domaine du compte est retiré ; Workers Builds gère sa propre authentification.
-
-Pour une validation locale sans publication :
+## Vérifications locales sans publication
 
 ```bash
 npm ci
 npm run check
+npm run test:e2e
 npm run build
 npm run hosting:check
-npx wrangler preview --help
 ```
 
-`hosting:check` vérifie la configuration et prépare le bundle avec `wrangler deploy --dry-run`. Il ne vérifie ni les droits du compte, ni la disponibilité du nom, ni un déploiement distant. `hosting:deploy` et `hosting:preview` sont de vraies publications : ne pas les exécuter pour cette simple préparation.
+Le dry-run vérifie le packaging et la configuration, sans confirmer des droits distants. `hosting:deploy` et `hosting:preview` sont de vraies publications et ne servent pas à une simple validation locale.
 
-## Vérifier une publication
+Le build écrit `dist/version.json`. Le workflow fournit explicitement le SHA et la branche du checkout ; les noms de branche ne sont jamais présentés comme des SHA. Vérifier la production sur `https://branchlab.siniverse.cc/version.json` et la Preview dev sur `https://dev.dev.branchlab.siniverse.cc/version.json`.
 
-1. Attendre la réussite du build Workers Builds associé au push sur `main`.
-2. Ouvrir `https://branchlab.siniverse.cc` et, si nécessaire, l'URL HTTPS `workers.dev` effectivement fournie par Cloudflare.
-3. Ouvrir `/version.json` sur le domaine public : `commit` doit correspondre au SHA de `main` construit et `branch` doit être `main`. Le champ `version` reste la version applicative de la branche, sans augmentation pour cette seule migration d'infrastructure.
-4. Vérifier le chargement des assets, les diagnostics, la sauvegarde locale, l'export/import JSON, puis une actualisation normale et une navigation directe vers une URL SPA. Vérifier également une Preview de branche et son `version.json`.
-5. Ne pas considérer les sauvegardes du domaine public comme perdues parce que la nouvelle URL de test ne les affiche pas : IndexedDB est isolée par origine. Ne pas supprimer les données du navigateur.
+Les données IndexedDB restent liées à leur origine : les données de production n'apparaissent pas automatiquement sur une Preview. BranchLab ne possède pas de Service Worker ni de précache PWA. L'instance LAN et ses services existants continuent à suivre `dev` indépendamment des runners GitHub.
 
-Chaque `npm run build` produit `dist/version.json`, aussi bien depuis Workers Builds que GitHub Actions. Pour `commit`, seules les valeurs SHA-1 complètes de `WORKERS_CI_COMMIT_SHA` puis `GITHUB_SHA` sont acceptées ; sinon le HEAD Git valide sert de repli, puis `null` si aucun SHA n'est disponible. Une valeur telle que `main` ne doit jamais être présentée comme une révision précise. Pour `branch`, `WORKERS_CI_BRANCH` reste prioritaire sur les variables GitHub puis le checkout Git. Aucun horodatage variable n'est ajouté au fichier.
+## Coûts et références
 
-BranchLab ne déclare pas de Service Worker, de manifeste PWA, de précache ni de redirection `_redirects`. Le problème de précache d'une réponse redirigée `/index.html → /` ne s'applique donc pas à cette version. Le routage `single-page-application` et le traitement HTML de Cloudflare sont conservés ; aucun changement applicatif de cache n'est nécessaire.
+La garde public et le runner standard évitent l'utilisation de runners hébergés privés dans ce workflow. GitHub indique que ses runners standards sont gratuits pour les dépôts publics ; les larger runners et les stockages supplémentaires suivent leurs propres conditions. Le workflow n'active aucune option payante et n'utilise pas de cache ou d'artefact Actions persistant. L'état des plans et quotas Cloudflare doit rester contrôlé séparément.
 
-## Domaine de production
-
-`branchlab.siniverse.cc` est déjà attaché à `siniverse-branchlab-site`. Sa route Custom Domain est suivie dans Wrangler pour que les prochaines publications restent cohérentes avec cet état. Aucun CNAME manuel vers `workers.dev` ni nouveau transfert n'est à effectuer.
-
-L'ancien Worker `app` a été supprimé par l'utilisateur. Toute correction ou restauration doit porter sur une version du Worker actuel, sans recréer l'ancien. La base de Preview existante `dev.branchlab.siniverse.cc` est également suivie dans la liste des Custom Domains, car Wrangler publie cette liste avec remplacement de portée. L'omettre pourrait retirer une association configurée manuellement. Aucun domaine supplémentaire n'est créé ici.
-
-## Références
-
-- [Configurer Workers Builds et ses commandes](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/)
-- [Choisir la branche de production et les Preview builds](https://developers.cloudflare.com/workers/ci-cd/builds/build-branches/)
-- [Versions de Node, npm et installation des dépendances](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/)
-- [Configurer les nouvelles Worker Previews](https://developers.cloudflare.com/workers/previews/configuration/)
-- [Créer une Preview et version minimale de Wrangler](https://developers.cloudflare.com/workers/previews/get-started/)
-- [Activer les hôtes et URL des Previews](https://developers.cloudflare.com/workers/previews/custom-domains/)
-- [Custom Domains Workers](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/)
-- [Coût des fichiers statiques](https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/)
-
-Le site reste statique, sans API d'IA, compte utilisateur, base de données ou publicité. L'instance LAN continue à suivre `dev` avec ses services séparés.
+- [Facturation GitHub Actions](https://docs.github.com/en/billing/concepts/product-billing/github-actions)
+- [Conditions au niveau des jobs](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-jobs-with-conditions)
+- [Runners standards GitHub](https://docs.github.com/en/actions/how-tos/write-workflows/choose-where-workflows-run/choose-the-runner-for-a-job)
+- [Previews depuis une CI externe](https://developers.cloudflare.com/workers/previews/examples/)
+- [Configuration des hôtes Preview](https://developers.cloudflare.com/workers/previews/custom-domains/)

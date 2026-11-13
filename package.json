@@ -11,6 +11,7 @@
     "dev": "vite --host 192.168.1.60 --port 5174 --strictPort",
     "build": "npm run changelog:check && tsc -b && vite build && node scripts/write-build-info.js",
     "build-info:test": "node --test scripts/write-build-info.test.js",
+    "actions:test": "node --test scripts/actions-deploy.test.js",
     "changelog:check": "node scripts/check-changelog.js",
     "changelog:test": "node --test scripts/check-changelog.test.js",
     "hosting:check": "wrangler deploy --dry-run",
@@ -22,7 +23,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "check": "npm run changelog:check && npm run changelog:test && npm run build-info:test && npm run typecheck && npm run lint && npm test"
+    "check": "npm run changelog:check && npm run changelog:test && npm run build-info:test && npm run actions:test && npm run typecheck && npm run lint && npm test"
   },
   "dependencies": {
     "@xyflow/react": "^12.12.1",
