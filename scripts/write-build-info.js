@@ -14,10 +14,17 @@ function readGit(args) {
   }
 }
 
+function validCommit(value) {
+  return typeof value === 'string' && /^[a-f0-9]{40}$/i.test(value) ? value : null;
+}
+
 export function createBuildInfo({ version, env = process.env, git = readGit }) {
   return {
     version,
-    commit: env.WORKERS_CI_COMMIT_SHA || env.GITHUB_SHA || git(['rev-parse', 'HEAD']) || null,
+    commit:
+      validCommit(env.WORKERS_CI_COMMIT_SHA) ||
+      validCommit(env.GITHUB_SHA) ||
+      validCommit(git(['rev-parse', 'HEAD'])),
     branch:
       env.WORKERS_CI_BRANCH ||
       env.GITHUB_HEAD_REF ||

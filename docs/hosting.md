@@ -1,12 +1,12 @@
 # Hébergement de BranchLab avec GitHub
 
-La préparation du 13 novembre 2026 remplace la publication depuis GitHub Actions par **Cloudflare Workers Builds**, connecté au dépôt privé `sinikebe/branchlab`. La cible est un **nouveau Worker** nommé `siniverse-branchlab-site`. L'ancien Worker `app` continue à servir sa dernière publication jusqu'au transfert du domaine effectué séparément.
+La publication de BranchLab utilise **Cloudflare Workers Builds**, connecté au dépôt privé `sinikebe/branchlab`, sur le Worker `siniverse-branchlab-site`. Le 13 novembre 2026, l'utilisateur a confirmé le transfert de `branchlab.siniverse.cc` vers ce Worker et la suppression de l'ancien Worker `app`. Ne pas recréer l'ancien Worker.
 
-Les fichiers du dépôt ne créent aucun Worker et ne déplacent aucun domaine. Le nom proposé doit être disponible dans le compte Cloudflare choisi ; cette disponibilité n'est pas vérifiée par le dépôt.
+`wrangler.jsonc` décrit désormais le Worker utilisé et son unique Custom Domain de production, `branchlab.siniverse.cc`. Cette déclaration conserve dans le code l'association déjà réalisée dans Cloudflare. Un push sur `main` peut lancer Workers Builds et publier sur ce site.
 
-## Créer le nouveau Worker
+## Paramètres du Worker connecté à GitHub
 
-Attendre que la préparation soit intégrée dans `main`, puis ouvrir **Workers & Pages → Create application → Connect GitHub** et choisir `sinikebe/branchlab`. Autoriser l'application GitHub Cloudflare à accéder à ce dépôt privé si nécessaire.
+Le Worker est déjà créé : ouvrir **Workers & Pages → siniverse-branchlab-site → Settings → Builds** pour retrouver ces paramètres. Ne pas relancer la création ou le transfert du domaine.
 
 | Champ | Valeur |
 | --- | --- |
@@ -26,7 +26,7 @@ Attendre que la préparation soit intégrée dans `main`, puis ouvrir **Workers 
 | Runtime variables / secrets / bindings | Aucun |
 | Assets / output directory | `dist`, déjà défini dans `wrangler.jsonc` ; aucun champ Pages à renseigner |
 
-Le nom du formulaire doit correspondre exactement à `name` dans `wrangler.jsonc`. Ne pas reprendre `app`, le nom de l'ancien Worker. Aucun `route`, `routes` ou domaine personnalisé n'est déclaré dans le fichier : le premier déploiement ne revendique donc pas `branchlab.siniverse.cc`.
+Le nom du projet doit correspondre exactement à `name` dans `wrangler.jsonc`. La liste `routes` contient uniquement `{ "pattern": "branchlab.siniverse.cc", "custom_domain": true }`, l'association de production déjà existante. Aucun autre domaine, wildcard ou domaine de développement n'est déclaré. Le domaine de production n'est pas activé comme hôte Preview ; les Previews utilisent `workers.dev`.
 
 `SKIP_DEPENDENCY_INSTALL=1` désactive l'installation automatique : la commande de build exécute elle-même `npm ci` à partir du lockfile suivi. Ne pas définir `NODE_ENV=production` pendant cette installation : TypeScript, Vite, les outils de contrôle et Wrangler sont des dépendances de développement.
 
@@ -38,15 +38,15 @@ La version de Node est fixée par le fichier et celle de npm par le champ `packa
 
 La configuration inclut `previews: {}` : l'application ne demande aucun secret, service ni base de données de prévisualisation. Les assets `dist` et leur routage SPA restent déclarés au niveau racine ; les assets de la branche testée sont envoyés par la commande Preview. Aucun contrôle du build ne limite les branches à `main`.
 
-`workers_dev: true` conserve l'adresse de test fournie par Cloudflare. `preview_urls: false` désactive les anciennes **Version URLs** ; cela ne remplace pas les nouvelles **Worker Previews**, configurées par `previews`. Conserver la commande du formulaire `npx wrangler preview`, plutôt que `wrangler versions upload`, qui crée une version utilisant les ressources configurées pour la production.
+`workers_dev: true` active l'adresse de production sur `workers.dev`. `preview_urls: true` active séparément les URL `workers.dev` des Previews : ce réglage est nécessaire ici, puisqu'aucun domaine personnalisé n'est encore activé pour les Previews. Le bloc `previews: {}` définit leur configuration, mais ne suffit pas à leur fournir une URL. Sans hôte Preview activé, une construction peut réussir sans URL et la PR afficher « No Preview URL ». Conserver la commande du formulaire `npx wrangler preview`, plutôt que `wrangler versions upload`, qui crée une version utilisant les ressources configurées pour la production.
 
-Après création, vérifier **Settings → Builds → Branch control** : production `main`, Preview builds activés. Vérifier aussi que les URL de Previews sur `workers.dev` sont disponibles dans les paramètres de l'hôte Preview ; aucun domaine personnalisé de Preview n'est nécessaire. Le journal d'un build de branche doit fournir une **Preview URL**, également visible dans l'onglet Previews et, lorsque l'intégration le permet, dans la PR.
+Après création, vérifier **Settings → Builds → Branch control** : production `main`, Preview builds activés. Dans **Domains → Worker URL**, vérifier que **Preview** est activé pour `workers.dev` ; aucun domaine personnalisé de Preview n'est nécessaire au démarrage. Le journal d'un build de branche doit fournir une **Preview URL**, également visible dans l'onglet Previews et, lorsque l'intégration le permet, dans la PR.
 
 L'activation rend les Previews accessibles sur leur URL. Le dépôt reste privé. Si une branche contient un travail qui ne doit pas encore être accessible, désactiver ses builds ou protéger ses Previews dans Cloudflare avant de la pousser.
 
 ## Une seule chaîne de publication
 
-GitHub Actions garde les contrôles du changelog, des types, du style, les tests unitaires, les parcours Chromium, le build et un `wrangler deploy --dry-run`. Il ne s'authentifie plus auprès de Cloudflare et ne publie ni l'ancien ni le nouveau Worker.
+GitHub Actions garde les contrôles du changelog, des types, du style, les tests unitaires, les parcours Chromium, le build et un `wrangler deploy --dry-run`. Il ne s'authentifie plus auprès de Cloudflare et ne publie pas le Worker.
 
 Workers Builds est le seul éditeur des déploiements et Previews. Ses builds sont indépendants de GitHub Actions : Cloudflare n'attend pas automatiquement le résultat du runner. Le build Cloudflare inclut donc `npm run check`. Les parcours navigateur restent validés sur le runner avant intégration selon le flux `feature/* → dev → main`. Configurer les protections GitHub si l'on veut imposer ces contrôles avant fusion.
 
@@ -64,27 +64,23 @@ npx wrangler preview --help
 
 `hosting:check` vérifie la configuration et prépare le bundle avec `wrangler deploy --dry-run`. Il ne vérifie ni les droits du compte, ni la disponibilité du nom, ni un déploiement distant. `hosting:deploy` et `hosting:preview` sont de vraies publications : ne pas les exécuter pour cette simple préparation.
 
-## Vérifier le nouveau Worker avant le domaine
+## Vérifier une publication
 
-1. Créer le nouveau Worker avec le formulaire ci-dessus et attendre la réussite de son premier build sur `main`.
-2. Ouvrir l'URL HTTPS `workers.dev` effectivement renvoyée par Cloudflare. Ne pas déduire le sous-domaine du compte à partir du nom du projet.
-3. Ouvrir `/version.json` sur cette URL : `commit` doit correspondre au SHA de `main` construit et `branch` doit être `main`. Le champ `version` reste la version applicative de la branche, sans augmentation pour cette seule migration d'infrastructure.
+1. Attendre la réussite du build Workers Builds associé au push sur `main`.
+2. Ouvrir `https://branchlab.siniverse.cc` et, si nécessaire, l'URL HTTPS `workers.dev` effectivement fournie par Cloudflare.
+3. Ouvrir `/version.json` sur le domaine public : `commit` doit correspondre au SHA de `main` construit et `branch` doit être `main`. Le champ `version` reste la version applicative de la branche, sans augmentation pour cette seule migration d'infrastructure.
 4. Vérifier le chargement des assets, les diagnostics, la sauvegarde locale, l'export/import JSON, puis une actualisation normale et une navigation directe vers une URL SPA. Vérifier également une Preview de branche et son `version.json`.
 5. Ne pas considérer les sauvegardes du domaine public comme perdues parce que la nouvelle URL de test ne les affiche pas : IndexedDB est isolée par origine. Ne pas supprimer les données du navigateur.
 
-Chaque `npm run build` produit désormais `dist/version.json`, aussi bien depuis Workers Builds que GitHub Actions. Les variables Cloudflare `WORKERS_CI_COMMIT_SHA` et `WORKERS_CI_BRANCH` sont prioritaires ; les variables GitHub puis le checkout Git servent de repli pour les validations locales. Aucun horodatage variable n'est ajouté au fichier.
+Chaque `npm run build` produit `dist/version.json`, aussi bien depuis Workers Builds que GitHub Actions. Pour `commit`, seules les valeurs SHA-1 complètes de `WORKERS_CI_COMMIT_SHA` puis `GITHUB_SHA` sont acceptées ; sinon le HEAD Git valide sert de repli, puis `null` si aucun SHA n'est disponible. Une valeur telle que `main` ne doit jamais être présentée comme une révision précise. Pour `branch`, `WORKERS_CI_BRANCH` reste prioritaire sur les variables GitHub puis le checkout Git. Aucun horodatage variable n'est ajouté au fichier.
 
 BranchLab ne déclare pas de Service Worker, de manifeste PWA, de précache ni de redirection `_redirects`. Le problème de précache d'une réponse redirigée `/index.html → /` ne s'applique donc pas à cette version. Le routage `single-page-application` et le traitement HTML de Cloudflare sont conservés ; aucun changement applicatif de cache n'est nécessaire.
 
-## Transférer le domaine quand la validation est terminée
+## Domaine de production
 
-Cette étape est distincte de la création et doit être réalisée lorsque l'utilisateur est prêt.
+`branchlab.siniverse.cc` est déjà attaché à `siniverse-branchlab-site`. Sa route Custom Domain est suivie dans Wrangler pour que les prochaines publications restent cohérentes avec cet état. Aucun CNAME manuel vers `workers.dev` ni nouveau transfert n'est à effectuer.
 
-1. Relever dans l'ancien Worker l'association actuelle de `branchlab.siniverse.cc` et conserver l'ancien Worker, sa dernière version et sa configuration pour un retour arrière. Exporter un setup depuis le domaine public constitue une sauvegarde indépendante supplémentaire.
-2. Dans le nouveau Worker, ouvrir **Settings → Domains & Routes → Add → Custom Domain** et saisir `branchlab.siniverse.cc`. Si Cloudflare refuse parce que le domaine appartient déjà à l'ancien Worker, retirer uniquement cette association de l'ancien, puis l'ajouter au nouveau. Prévoir une courte interruption possible entre ces opérations.
-3. Laisser Cloudflare gérer l'enregistrement DNS et le certificat du Custom Domain. Ne pas créer un CNAME manuel vers `workers.dev`.
-4. Attendre le statut actif, ouvrir `https://branchlab.siniverse.cc/version.json`, comparer le SHA à celui du nouveau Worker et refaire le chargement, l'actualisation et la sauvegarde. L'origine publique reste identique : les données IndexedDB existantes restent liées à cette origine.
-5. En cas d'échec, réassocier le domaine à l'ancien Worker et vérifier son état. Supprimer l'ancien Worker seulement après une période de validation choisie par l'utilisateur.
+L'ancien Worker `app` a été supprimé par l'utilisateur. Toute correction ou restauration doit porter sur une version du Worker actuel, sans recréer l'ancien. La configuration d'un éventuel domaine de développement est une opération distincte ; aucun domaine supplémentaire n'est ajouté ici.
 
 ## Références
 
@@ -93,6 +89,7 @@ Cette étape est distincte de la création et doit être réalisée lorsque l'ut
 - [Versions de Node, npm et installation des dépendances](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/)
 - [Configurer les nouvelles Worker Previews](https://developers.cloudflare.com/workers/previews/configuration/)
 - [Créer une Preview et version minimale de Wrangler](https://developers.cloudflare.com/workers/previews/get-started/)
+- [Activer les hôtes et URL des Previews](https://developers.cloudflare.com/workers/previews/custom-domains/)
 - [Custom Domains Workers](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/)
 - [Coût des fichiers statiques](https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/)
 

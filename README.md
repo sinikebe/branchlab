@@ -48,7 +48,7 @@ Le brouillon est sauvegardé dans IndexedDB sur ce navigateur. Effacer les donn�
 - Une fois la fusion validée et le travail terminé, supprimer la branche de fonctionnalité localement et sur `origin`, après vérification que tous ses commits sont intégrés à `dev`. Conserver `dev`, `main` et les branches non fusionnées.
 - L’instance de développement du réseau local suit uniquement `origin/dev`.
 - Une release est préparée et fusionnée séparément dans `main` ; aucune release automatique n’est créée.
-- GitHub Actions vérifie les branches de fonctionnalité, `dev`, `main` et les demandes de fusion avec le runner self-hosted de ce serveur, sans publier. Une fois le nouveau Worker connecté à GitHub, Workers Builds publie `main` et crée des Previews pour les autres branches.
+- GitHub Actions vérifie les branches de fonctionnalité, `dev`, `main` et les demandes de fusion avec le runner self-hosted de ce serveur, sans publier. Workers Builds publie `main` et crée des Previews pour les autres branches.
 
 Les protections de branches et l’obligation de revue ne sont pas imposées par les fichiers de workflow : elles se configurent dans les paramètres GitHub.
 
@@ -56,7 +56,7 @@ Les protections de branches et l’obligation de revue ne sont pas imposées par
 
 La publication est préparée pour **Cloudflare Workers Static Assets**, en servant uniquement le dossier `dist/`. Aucun code serveur, base de données ou abonnement payant n’est nécessaire pour cette version. Le choix de l’hébergement laisse possible l’ajout de publicités plus tard ; aucune publicité n’est intégrée aujourd’hui.
 
-Le dépôt prépare un nouveau Worker `siniverse-branchlab-site`, connecté à GitHub avec Workers Builds. GitHub Actions reste une CI de validation et n'utilise plus de secrets Cloudflare. Les fichiers de configuration seuls ne créent aucun Worker et ne déplacent pas le domaine de l'ancien Worker `app`. Le dépôt reste privé et l’instance LAN suit toujours `dev`. Les réglages exacts du formulaire, les Previews et le transfert ultérieur du domaine sont décrits dans la procédure ci-dessous.
+Le Worker `siniverse-branchlab-site`, connecté à GitHub avec Workers Builds, sert désormais `branchlab.siniverse.cc`. Ce Custom Domain de production est déclaré dans `wrangler.jsonc`, et les Previews sont accessibles sur leurs URL `workers.dev`. L'utilisateur a supprimé l'ancien Worker `app` après le transfert. GitHub Actions reste une CI de validation sans secrets Cloudflare. Le dépôt reste privé et l’instance LAN suit toujours `dev`. Les paramètres de build et les vérifications sont décrits dans la procédure ci-dessous.
 
 Voir [la configuration Cloudflare, les limites de l’offre gratuite et la connexion du compte](docs/hosting.md).
 
