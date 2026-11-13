@@ -6,6 +6,40 @@ const WORKERS_SHA = '0974124ff1af0c9e18bc7018aa49ff438b9d91d5';
 const GITHUB_SHA = '68c94eaea85c8112872c0d829e96171a6516951a';
 const LOCAL_SHA = 'b4b81cdd91526d8895fc5be69d16df9880db902e';
 
+test('the shared CI records its immutable revision and actual source branch', () => {
+  for (const source of ['main', 'dev', 'feature/video']) {
+    assert.deepEqual(
+      createBuildInfo({
+        version: '0.4.1',
+        env: {
+          SINIVERSE_SHA: LOCAL_SHA,
+          SINIVERSE_BRANCH: source === 'main' ? 'main' : 'dev',
+          SINIVERSE_SOURCE_BRANCH: source,
+          WORKERS_CI_COMMIT_SHA: WORKERS_SHA,
+          WORKERS_CI_BRANCH: 'old-branch',
+          GITHUB_SHA,
+        },
+        git: () => assert.fail('The shared CI already supplied its revision'),
+      }),
+      { version: '0.4.1', commit: LOCAL_SHA, branch: source },
+    );
+  }
+});
+
+test('an invalid shared CI SHA never becomes a build revision', () => {
+  assert.deepEqual(
+    createBuildInfo({
+      version: '0.3.0',
+      env: { SINIVERSE_SHA: 'main', SINIVERSE_BRANCH: 'main' },
+      git: (args) => {
+        assert.deepEqual(args, ['rev-parse', 'HEAD']);
+        return LOCAL_SHA;
+      },
+    }),
+    { version: '0.3.0', commit: LOCAL_SHA, branch: 'main' },
+  );
+});
+
 test('Workers Builds records production and Preview revisions without requiring main', () => {
   for (const branch of ['main', 'dev', 'feature/video']) {
     assert.deepEqual(

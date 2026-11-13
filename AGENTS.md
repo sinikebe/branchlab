@@ -23,3 +23,13 @@ Voir [la procédure de versionnement](docs/versioning.md). Une entrée encore en
 Développer dans une branche `feature/*`, valider par la CI GitHub sur un runner hébergé standard, puis intégrer dans `dev`, qui met à jour l’instance locale et sa Preview. `main` porte les releases publiques. La CI hébergée est bloquée au niveau des jobs tant que le dépôt n'est pas public : conserver cette garde et effectuer les contrôles locaux pendant cette période, sans basculer vers un runner facturable. Les PR, y compris externes, sont validées sans secrets et ne publient pas. Les publications passent uniquement par les push sur `main`/`dev` ou une demande manuelle explicite sur ces branches. Ne pas réactiver Workers Builds en parallèle.
 
 Supprimer les branches de fonctionnalité après leur fusion et la validation du résultat. Conserver les modifications utilisateur qui ne relèvent pas de la tâche.
+
+## CI commune siniverse
+
+Le caller `.github/workflows/ci.yml`, nommé `CI`, doit rester identique aux quatre applications et épingler un SHA immuable du réutilisable dans `sinikebe/siniverse`. Les contrôles de publication, le registre des cibles et `deployment.json` appartiennent au central : ne pas recréer un helper propre à BranchLab. Garder Node `24.22.2` dans `.node-version`, npm `11.19.1` dans `packageManager` et Wrangler `4.161.0` verrouillé.
+
+Le nettoyage après fusion appartient aussi au central, dans un job séparé sans secret Cloudflare. Seul ce job reçoit `contents: write` et `pull-requests: read`. Préserver les forks, les branches permanentes ou protégées et tout nouveau commit ; ne pas remplacer la suppression conditionnée au SHA par une suppression sans garde.
+
+`npm run ci:check` conserve les contrôles et les parcours navigateur ; `npm run ci:build` produit `dist/` et le `version.json` existant. Lire les variables `SINIVERSE_*` du contrat central, dont `SINIVERSE_BASE_SHA` pour le changelog et `SINIVERSE_SOURCE_BRANCH` pour la branche source. Ne pas déplacer les fonctionnalités de `dev` dans `main` lors d'un portage de CI.
+
+Les domaines sont gérés au dashboard Cloudflare. Omettre `routes` dans Wrangler, conserver `workers_dev: false` et `preview_urls: false`, sans rétablir les anciennes associations déclaratives. Voir [la procédure de publication](docs/hosting.md).

@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import {
   checkChangelog,
   validateCurrentRelease,
@@ -209,6 +210,28 @@ test('compares a real Git baseline, including an untracked source file', (t) => 
   write('package.json', value.packageJson);
   write('package-lock.json', value.lockfile);
   assert.deepEqual(checkChangelog({ root, base }), { version: '0.2.0', count: 2 });
+});
+
+test('the CLI uses the shared CI baseline unless an explicit base is provided', (t) => {
+  const { root, write, base } = fixture(t);
+  const cli = fileURLToPath(new URL('./check-changelog.js', import.meta.url));
+  const run = (env, args = []) =>
+    execFileSync(process.execPath, [cli, ...args], {
+      cwd: root,
+      env: { ...process.env, ...env },
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  assert.match(run({ SINIVERSE_BASE_SHA: base }), /Changelog valide/);
+  assert.match(
+    run({ SINIVERSE_BASE_SHA: 'missing-reference' }, ['--base', base]),
+    /Changelog valide/,
+  );
+  write('src/App.tsx', 'export const App = () => "Unversioned change";\n');
+  assert.throws(
+    () => run({ SINIVERSE_BASE_SHA: base }),
+    (error) => /nouvelle version/.test(error.stderr),
+  );
 });
 
 test('detects runtime dependency changes without demanding a release for development tools', (t) => {
