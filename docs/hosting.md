@@ -12,10 +12,13 @@ Le Worker existant reste `siniverse-branchlab-site`, sur le compte `bbc234170943
 | --- | --- | --- |
 | Push sur `main` | Contrôles, Chromium, build, dry-run | Production |
 | Push sur `dev` | Mêmes contrôles | Preview stable nommée `dev` |
-| PR vers `main` ou `dev`, interne ou externe | Mêmes contrôles sans credentials Cloudflare | Aucune |
+| PR de travail vers `dev`, interne ou externe | Mêmes contrôles sans credentials Cloudflare | Aucune |
+| PR `dev` → `main` du même dépôt | Mêmes contrôles ; fusion après test et accord du propriétaire | Aucune avant fusion |
 | `workflow_dispatch`, `deploy=false` (défaut) | Mêmes contrôles | Aucune |
 | `workflow_dispatch`, `deploy=true`, branche `main` ou `dev` | Mêmes contrôles | Cible de la branche |
 | Dépôt privé ou visibilité inconnue | Job ignoré avant attribution du runner | Aucune |
+
+Toutes les modifications sont d'abord proposées à `dev`. Après revue et CI verte, les agents peuvent fusionner dans `dev` puis contrôler la Preview. Le propriétaire la teste avant de donner son accord explicite à la fusion d'une PR `dev` → `main`. `main` reste inchangée jusqu'à cet accord.
 
 Utiliser les exécutions normales des PR et des fusions. Le lancement manuel **Actions → CI → Run workflow** sert à une vérification ou une publication explicitement demandée ; `deploy` reste décoché par défaut. Une publication manuelle sur une autre branche est refusée. Aucune Preview n'est créée pour une PR.
 

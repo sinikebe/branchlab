@@ -2,6 +2,10 @@
 
 La numérotation active commence à **0.0.1 le 13 novembre 2026**. Les fonctionnalités et données de la version précédemment publiée 0.4.1 sont conservées. Les numéros de l'ancienne période restent inchangés.
 
+## Circuit d'intégration
+
+Toutes les PR de travail ciblent `dev`. Les agents peuvent y fusionner après revue et CI verte, puis vérifier la Preview, sans demander un nouvel accord. Le propriétaire teste cette Preview avant la promotion : `main` accepte uniquement une PR depuis `dev` du même dépôt, puis sa fusion attend l'accord explicite du propriétaire. Les évolutions de version sont donc éprouvées dans `dev` avant leur publication en production. Les branches permanentes sont conservées ; aucune avance de `dev` depuis `main` ne remplace ce circuit.
+
 ## Version attribuée par la CI commune
 
 Le job de confiance du réutilisable `sinikebe/siniverse` gère exclusivement le calcul et les tags annotés immuables :

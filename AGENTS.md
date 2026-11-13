@@ -20,7 +20,7 @@ Voir [la procédure de versionnement](docs/versioning.md). Le badge de version a
 
 ## Intégration
 
-Développer dans une branche `feature/*`, valider par la CI GitHub sur un runner hébergé standard, puis intégrer dans `dev`, qui met à jour l’instance locale et sa Preview. `main` porte les releases publiques. La CI hébergée est bloquée au niveau des jobs tant que le dépôt n'est pas public : conserver cette garde et effectuer les contrôles locaux pendant cette période, sans basculer vers un runner facturable. Les PR, y compris externes, sont validées sans secrets et ne publient pas. Les publications passent uniquement par les push sur `main`/`dev` ou une demande manuelle explicite sur ces branches. Ne pas réactiver Workers Builds en parallèle.
+Toutes les modifications passent par une PR de `feature/*` vers `dev`. Après revue et CI verte, les agents peuvent fusionner dans `dev` sans accord supplémentaire du propriétaire, puis vérifier la Preview. `main` accepte uniquement une PR depuis `dev` dans ce même dépôt, après test de la Preview par le propriétaire et son accord explicite pour cette promotion. Le circuit est `feature/*` → `dev` → `main` ; aucune avance de `dev` depuis `main` ne remplace ces étapes. L'instance locale suit `dev`. Les jobs hébergés restent bloqués si le dépôt n'est pas public. Les PR sont validées sans secrets Cloudflare et ne publient pas ; les push sur `dev` publient la Preview et ceux sur `main` une production préalablement approuvée. Ne pas réactiver Workers Builds en parallèle.
 
 Supprimer les branches de fonctionnalité après leur fusion et la validation du résultat. Conserver les modifications utilisateur qui ne relèvent pas de la tâche.
 

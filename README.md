@@ -46,10 +46,10 @@ Le brouillon est sauvegardé dans IndexedDB sur ce navigateur. Effacer les donn�
 ## Branches et validation
 
 - Une fonctionnalité se développe dans `feature/<nom>`.
-- Après validation, elle est fusionnée dans `dev` et envoyée vers le dépôt.
+- Toutes les PR de travail ciblent `dev`. Après revue et CI verte, la fusion dans `dev` ne nécessite pas d'accord supplémentaire du propriétaire.
 - Une fois la fusion validée et le travail terminé, supprimer la branche de fonctionnalité localement et sur `origin`, après vérification que tous ses commits sont intégrés à `dev`. Conserver `dev`, `main` et les branches non fusionnées.
 - L’instance de développement du réseau local suit uniquement `origin/dev`.
-- Une release est préparée et fusionnée séparément dans `main` ; aucune release automatique n’est créée.
+- Une promotion est préparée uniquement par une PR `dev` → `main`, après test de la Preview par le propriétaire et son accord explicite. `main` reste inchangée jusqu'à cet accord ; aucune avance de `dev` depuis `main` ne contourne ce circuit.
 - GitHub Actions valide les PR vers `dev` et `main`, ainsi que les push sur ces branches, avec des runners hébergés standards. Les jobs sont bloqués tant que le dépôt n'est pas public. Après validation, `main` publie la production et `dev` sa Preview ; les PR ne reçoivent aucun secret et ne publient pas.
 
 Les protections de branches et l’obligation de revue ne sont pas imposées par les fichiers de workflow : elles se configurent dans les paramètres GitHub.
