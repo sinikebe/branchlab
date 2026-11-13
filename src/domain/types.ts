@@ -11,6 +11,7 @@ export type GpuId =
   | 'rtx5060'
   | 'rtx5050';
 export type DisplayId = 'demo' | 'xeneon-flex';
+export type MotherboardId = 'asrock-b850-pro-a-wifi' | 'msi-mpg-x870e-carbon-wifi';
 export interface Source {
   kind: 'manufacturer' | 'standard' | 'user' | 'demo';
   label: string;
@@ -39,6 +40,31 @@ export interface GpuSpecifications {
   source: Source;
   evidence?: Record<string, Source>;
 }
+/** Reference inventory; CPU, RAM, PCIe, storage and network are not yet simulated. */
+export interface MotherboardSpecifications {
+  manufacturer: string;
+  socket: string;
+  chipset: string;
+  formFactor: string;
+  cpuSupport: string[];
+  memory: {
+    type: string;
+    slots: number;
+    maxCapacityGB: number;
+    maxOcMtps: number | null;
+    notes: string[];
+  };
+  expansionSlots: string[];
+  storage: string[];
+  rearConnectors: string[];
+  internalConnectors: string[];
+  network: string[];
+  audio: string[];
+  displayNotes: string[];
+  notes: string[];
+  source: Source;
+  evidence?: Record<string, Source>;
+}
 /** A configuration explicitly accepted for this RGB timing by the declaring port.
  * This contract includes its encoder/decoder throughput and buffer constraints;
  * general DSC support alone does not establish acceptance of a profile.
@@ -54,6 +80,18 @@ export interface DscProfile {
   sliceHeight: number;
   link: { encoding: '8b10b'; laneCount: 1 | 2 | 4; fec: true };
   source: Source;
+}
+/** Published link facts, separate from a validated usable video budget. */
+export interface VideoReference {
+  version: string;
+  transport: string;
+  laneCount: number | null;
+  laneRateGbps: number | null;
+  rawBandwidthGbps: number | null;
+  maxMode: string | null;
+  notes: string[];
+  source: Source;
+  evidence?: Record<string, Source>;
 }
 export interface Port {
   id: string;
@@ -72,6 +110,7 @@ export interface Port {
   source: Source;
   /** Overrides source for individual characteristics derived from another reference. */
   evidence?: Record<string, Source>;
+  videoReference?: VideoReference;
 }
 export interface InternalRoute {
   fromPortId: string;
@@ -83,12 +122,13 @@ export interface InternalRoute {
 export interface Device {
   id: string;
   name: string;
-  kind: 'gpu' | 'display' | 'adapter' | 'other';
+  kind: 'gpu' | 'motherboard' | 'display' | 'adapter' | 'other';
   ports: Port[];
   routes: InternalRoute[];
   source: Source;
   catalogId?: string;
   gpu?: GpuSpecifications;
+  motherboard?: MotherboardSpecifications;
   display?: {
     diagonalInches: number;
     panelTechnology: string;

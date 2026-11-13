@@ -1,6 +1,7 @@
 import type { Cable, Device, DisplayId, GpuId, Port, Setup, Source, VideoMode } from './types';
 import { createGpu } from './gpus';
 export * from './gpus';
+export * from './motherboards';
 
 const checkedAt = '2026-11-10';
 export const DEMO_SOURCE: Source = {

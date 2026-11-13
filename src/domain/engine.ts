@@ -161,7 +161,7 @@ function inspectPath(setup: Setup, steps: Step[], mode: VideoMode): PathResult {
         'source-unverified',
         'indeterminate',
         'Origine du signal non documentée',
-        'Les capacités de la carte NVIDIA ne sont pas attribuées à cette sortie. Le processeur graphique relié, son activation et le routage doivent être renseignés.',
+        'Les capacités d’une carte graphique dédiée ne sont pas attribuées à cette sortie. Le circuit graphique du processeur, son activation et le routage vers les prises de la carte mère doivent être renseignés.',
         [sourceDevice.id],
       ),
     );
@@ -294,7 +294,9 @@ function inspectPath(setup: Setup, steps: Step[], mode: VideoMode): PathResult {
           'port-capacity-unknown',
           'indeterminate',
           'Capacité du port inconnue',
-          `${device.name} — ${port.label} : débit utile non documenté.`,
+          port.videoReference?.rawBandwidthGbps != null
+            ? `${device.name} — ${port.label} : ${port.videoReference.rawBandwidthGbps.toLocaleString('fr-FR')} Gbit/s bruts documentés ; le budget vidéo utilisable reste à établir après codage, FEC et transport.`
+            : `${device.name} — ${port.label} : débit utile non documenté.`,
           [device.id],
         ),
       );

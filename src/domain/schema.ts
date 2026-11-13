@@ -58,6 +58,19 @@ const port = z.object({
     .optional(),
   source,
   evidence: z.record(z.string(), source).optional(),
+  videoReference: z
+    .object({
+      version: name,
+      transport: name,
+      laneCount: z.number().int().positive().max(128).nullable(),
+      laneRateGbps: payload,
+      rawBandwidthGbps: payload,
+      maxMode: z.string().min(1).max(2000).nullable(),
+      notes: z.array(z.string().min(1).max(2000)).max(100),
+      source,
+      evidence: z.record(z.string(), source).optional(),
+    })
+    .optional(),
 });
 const route = z.object({
   fromPortId: id,
@@ -77,11 +90,37 @@ export const SETUP_SCHEMA: z.ZodType<Setup> = z
         z.object({
           id,
           name,
-          kind: z.enum(['gpu', 'display', 'adapter', 'other']),
+          kind: z.enum(['gpu', 'motherboard', 'display', 'adapter', 'other']),
           ports: z.array(port).max(100),
           routes: z.array(route).max(500),
           source,
           catalogId: id.optional(),
+          motherboard: z
+            .object({
+              manufacturer: name,
+              socket: name,
+              chipset: name,
+              formFactor: name,
+              cpuSupport: z.array(z.string().min(1).max(2000)).max(100),
+              memory: z.object({
+                type: name,
+                slots: z.number().int().positive().max(100),
+                maxCapacityGB: z.number().positive().max(100000),
+                maxOcMtps: z.number().positive().max(1000000).nullable(),
+                notes: z.array(z.string().min(1).max(2000)).max(100),
+              }),
+              expansionSlots: z.array(z.string().min(1).max(2000)).max(100),
+              storage: z.array(z.string().min(1).max(2000)).max(100),
+              rearConnectors: z.array(z.string().min(1).max(2000)).max(100),
+              internalConnectors: z.array(z.string().min(1).max(2000)).max(100),
+              network: z.array(z.string().min(1).max(2000)).max(100),
+              audio: z.array(z.string().min(1).max(2000)).max(100),
+              displayNotes: z.array(z.string().min(1).max(2000)).max(100),
+              notes: z.array(z.string().min(1).max(2000)).max(100),
+              source,
+              evidence: z.record(z.string(), source).optional(),
+            })
+            .optional(),
           gpu: z
             .object({
               architecture: name,

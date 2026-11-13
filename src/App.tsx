@@ -45,10 +45,14 @@ import {
   CABLE_PROFILES,
   GPU_CATALOG,
   getGpuId,
+  createMotherboard,
+  getMotherboardId,
+  MOTHERBOARD_CATALOG,
   VIDEO_MODES,
   type Setup,
   type Device,
   type GpuId,
+  type MotherboardId,
   type Status,
   type DscProfile,
 } from './domain';
@@ -57,6 +61,7 @@ import { validateEditorSetup } from './editor-validation';
 import { DisplayReference, PublishedModes } from './components/DisplayReference';
 import { DscSettings } from './components/DscSettings';
 import { GpuReference } from './components/GpuReference';
+import { MotherboardReference } from './components/MotherboardReference';
 import { Changelog } from './components/Changelog';
 import { version as appVersion } from '../package.json';
 
@@ -81,7 +86,33 @@ const connectorName = (id: string) =>
   id === 'displayport' ? 'DisplayPort' : id === 'hdmi' ? 'HDMI' : id === 'usb-c' ? 'USB-C' : id;
 const userSource = { kind: 'user' as const, label: 'Caractéristique déclarée par l’utilisateur' };
 
-function HardwareArt({ display = false }: { display?: boolean }) {
+function HardwareArt({
+  display = false,
+  motherboard = false,
+}: {
+  display?: boolean;
+  motherboard?: boolean;
+}) {
+  if (motherboard)
+    return (
+      <div className="motherboard-art" aria-hidden="true">
+        <div className="motherboard-socket">
+          <Cpu size={31} />
+        </div>
+        <div className="motherboard-memory">
+          <i />
+          <i />
+          <i />
+          <i />
+        </div>
+        <div className="motherboard-slots">
+          <i />
+          <i />
+          <i />
+        </div>
+        <span>AM5</span>
+      </div>
+    );
   return display ? (
     <div className="monitor-art" aria-hidden="true">
       <div className="monitor-glass">
@@ -139,10 +170,16 @@ function Equipment({ data }: NodeProps<EquipmentNode>) {
           <span className={`node-icon ${display ? 'purple' : ''}`}>
             {display ? <Monitor size={15} /> : <Cpu size={15} />}
           </span>
-          {display ? 'ÉCRAN' : data.device.kind === 'gpu' ? 'CARTE GRAPHIQUE' : 'SOURCE VIDÉO'}
+          {display
+            ? 'ÉCRAN'
+            : data.device.kind === 'gpu'
+              ? 'CARTE GRAPHIQUE'
+              : data.device.motherboard
+                ? 'CARTE MÈRE'
+                : 'SOURCE VIDÉO'}
           <span className="node-menu">···</span>
         </div>
-        <HardwareArt display={display} />
+        <HardwareArt display={display} motherboard={Boolean(data.device.motherboard)} />
         <h3>{data.device.name.replace('NVIDIA GeForce ', '')}</h3>
         <p>
           {data.device.source.kind === 'demo'
@@ -155,7 +192,9 @@ function Equipment({ data }: NodeProps<EquipmentNode>) {
                   : getGpuId(data.device)
                     ? 'NVIDIA · design de référence'
                     : 'Profil importé · données conservées'
-                : 'Capacités à renseigner'}
+                : data.device.motherboard
+                  ? `${data.device.motherboard.socket} · ${data.device.motherboard.chipset} · ${data.device.motherboard.formFactor}`
+                  : 'Capacités à renseigner'}
         </p>
       </button>
       <div className="node-ports">
@@ -198,7 +237,12 @@ export function App() {
   const [setup, setSetup] = useState<Setup>(() => createSetup());
   const [ready, setReady] = useState(false);
   const [canSave, setCanSave] = useState(false);
-  const [saveState, setSaveState] = useState('Chargement…');
+  const [saveResult, setSaveResult] = useState<{ setup: Setup | null; status: string }>({
+    setup: null,
+    status: 'Chargement…',
+  });
+  const saveState =
+    ready && canSave && saveResult.setup !== setup ? 'Enregistrement…' : saveResult.status;
   const [selection, setSelection] = useState<Selection>('cable');
   const [panel, setPanel] = useState<'diagnosis' | 'equipment'>('diagnosis');
   const [modal, setModal] = useState<'library' | 'sources' | 'guide' | 'changelog' | null>(null);
@@ -210,9 +254,11 @@ export function App() {
   const upload = useRef<HTMLInputElement>(null);
   const canvas = useRef<HTMLDivElement>(null);
   const modalClose = useRef<HTMLButtonElement>(null);
+  const previousOutputs = useRef<Record<string, string>>({});
   const [flow, setFlow] = useState<ReactFlowInstance<EquipmentNode> | null>(null);
   const source = setup.devices.find((device) => device.id === setup.goal.sourceDeviceId)!;
   const gpuModelId = source.kind === 'gpu' ? getGpuId(source) : null;
+  const motherboardModelId = getMotherboardId(source);
   const display = setup.devices.find((device) => device.id === setup.goal.displayDeviceId)!;
   const cable = setup.cables[0];
   const connection = setup.connections[0];
@@ -258,7 +304,7 @@ export function App() {
       .catch((error) => {
         if (active) {
           setNotice(error.message);
-          setSaveState('Sauvegarde indisponible');
+          setSaveResult({ setup: null, status: 'Sauvegarde indisponible' });
           setReady(true);
         }
       });
@@ -268,18 +314,25 @@ export function App() {
   }, []);
   useEffect(() => {
     if (!ready || !canSave) return;
-    setSaveState('Enregistrement…');
+    let active = true;
+    setSaveResult({ setup, status: 'Enregistrement…' });
     const timer = setTimeout(() => {
       saveSetup(setup)
-        .then(() => setSaveState('Enregistré sur cet appareil'))
+        .then(() => {
+          if (active) setSaveResult({ setup, status: 'Enregistré sur cet appareil' });
+        })
         .catch(() => {
-          setSaveState('Échec de sauvegarde');
+          if (!active) return;
+          setSaveResult({ setup, status: 'Échec de sauvegarde' });
           setNotice(
             'La sauvegarde locale est indisponible. Exportez votre setup pour le conserver.',
           );
         });
     }, 400);
-    return () => clearTimeout(timer);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, [setup, ready, canSave]);
   useEffect(() => {
     if (!notice) return;
@@ -383,12 +436,11 @@ export function App() {
 
   const setGpu = (id: GpuId) => {
     const output = sourcePort.id;
+    previousOutputs.current[source.id] = output;
     const replacement = createGpu(id);
     const replacementPort = replacement.ports.some((port) => port.id === output) ? output : 'dp-1';
     update((draft) => {
-      draft.devices = draft.devices.filter(
-        (device) => device.kind !== 'gpu' && device.id !== 'motherboard-1',
-      );
+      draft.devices = draft.devices.filter((device) => device.kind !== 'gpu');
       draft.devices.unshift(replacement);
       draft.goal.sourceDeviceId = 'gpu-1';
       if (draft.connections[0])
@@ -424,7 +476,30 @@ export function App() {
         : 'Profil de démonstration sélectionné.',
     );
   };
+  const setMotherboard = (id: MotherboardId) => {
+    previousOutputs.current[source.id] = sourcePort.id;
+    const replacement = createMotherboard(id);
+    const output =
+      replacement.ports.find((port) => port.connector === sourcePort.connector) ??
+      replacement.ports[0];
+    update((draft) => {
+      draft.devices = draft.devices.filter(
+        (device) => device.kind !== 'motherboard' && device.id !== 'motherboard-1',
+      );
+      draft.devices.push(replacement);
+      draft.goal.sourceDeviceId = replacement.id;
+      if (draft.connections[0])
+        draft.connections[0].from = { deviceId: replacement.id, portId: output.id };
+    });
+    setPendingOutput(output.id);
+    setModal(null);
+    selectDevice('gpu');
+    setNotice(
+      'Carte mère ajoutée. Ses sorties vidéo nécessitent un processeur avec circuit graphique et un routage documentés.',
+    );
+  };
   const changeOrigin = (motherboard: boolean) => {
+    previousOutputs.current[source.id] = sourcePort.id;
     if (!motherboard) {
       const previousGpu = setup.devices.find(
         (device) => device.kind === 'gpu' && device.ports.length > 0,
@@ -436,46 +511,50 @@ export function App() {
         setModal('library');
         return;
       }
-      const output = previousGpu.ports.some((port) => port.id === pendingOutput)
-        ? pendingOutput
-        : previousGpu.ports[0].id;
+      const preferred = previousOutputs.current[previousGpu.id];
+      const output =
+        previousGpu.ports.find((port) => port.id === preferred) ?? previousGpu.ports[0];
       update((draft) => {
-        draft.devices = draft.devices.filter((device) => device.id !== 'motherboard-1');
         draft.goal.sourceDeviceId = previousGpu.id;
         if (draft.connections[0])
-          draft.connections[0].from = { deviceId: previousGpu.id, portId: output };
+          draft.connections[0].from = { deviceId: previousGpu.id, portId: output.id };
       });
-      setPendingOutput(output);
+      setPendingOutput(output.id);
       return;
     }
-    setPendingOutput(sourcePort.id);
+    const previousBoard = setup.devices.find(
+      (device) =>
+        (device.kind === 'motherboard' || device.id === 'motherboard-1') && device.ports.length > 0,
+    );
+    const board: Device = previousBoard ?? {
+      id: 'motherboard-1',
+      name: 'Sortie de carte mère',
+      kind: 'other',
+      source: userSource,
+      routes: [],
+      ports: [
+        {
+          id: 'dp-out',
+          label: 'DisplayPort · non documenté',
+          connector: 'displayport',
+          role: 'source',
+          protocols: null,
+          maxPayloadGbps: null,
+          dsc: null,
+          supportedModeIds: null,
+          source: userSource,
+        },
+      ],
+    };
+    const preferred = previousOutputs.current[board.id];
+    const output = board.ports.find((port) => port.id === preferred) ?? board.ports[0];
     update((draft) => {
-      const board: Device = {
-        id: 'motherboard-1',
-        name: 'Sortie de carte mère',
-        kind: 'other',
-        source: userSource,
-        routes: [],
-        ports: [
-          {
-            id: 'dp-out',
-            label: 'DisplayPort · non documenté',
-            connector: 'displayport',
-            role: 'source',
-            protocols: null,
-            maxPayloadGbps: null,
-            dsc: null,
-            supportedModeIds: null,
-            source: userSource,
-          },
-        ],
-      };
-      draft.devices = draft.devices.filter((device) => device.id !== board.id);
-      draft.devices.push(board);
+      if (!previousBoard) draft.devices.push(board);
       draft.goal.sourceDeviceId = board.id;
       if (draft.connections[0])
-        draft.connections[0].from = { deviceId: board.id, portId: 'dp-out' };
+        draft.connections[0].from = { deviceId: board.id, portId: output.id };
     });
+    setPendingOutput(output.id);
   };
   const onConnect = (link: FlowConnection) => {
     if (
@@ -600,8 +679,14 @@ export function App() {
           device.source,
           ...(device.display ? [device.display.source] : []),
           ...(device.gpu ? [device.gpu.source, ...Object.values(device.gpu.evidence ?? {})] : []),
+          ...(device.motherboard
+            ? [device.motherboard.source, ...Object.values(device.motherboard.evidence ?? {})]
+            : []),
           ...device.ports.flatMap((port) => [
             port.source,
+            ...(port.videoReference
+              ? [port.videoReference.source, ...Object.values(port.videoReference.evidence ?? {})]
+              : []),
             ...Object.values(port.evidence ?? {}),
             ...(port.dscProfiles ?? []).map((profile) => profile.source),
           ]),
@@ -663,7 +748,8 @@ export function App() {
           </button>
           <div className="sidebar-separator" />
           <div className="sidebar-label library-heading">
-            BIBLIOTHÈQUE <span>{GPU_CATALOG.length + DISPLAY_CATALOG.length}</span>
+            BIBLIOTHÈQUE{' '}
+            <span>{GPU_CATALOG.length + MOTHERBOARD_CATALOG.length + DISPLAY_CATALOG.length}</span>
           </div>
           <p className="sidebar-hint">Les premières briques de votre installation.</p>
           {GPU_CATALOG.map((gpu) => (
@@ -674,6 +760,22 @@ export function App() {
               <span>
                 <strong>{gpu.shortName.replace(/(\d+) Go$/, '$1\u00a0Go')}</strong>
                 <small>NVIDIA · Carte graphique</small>
+              </span>
+              <Plus size={15} />
+            </button>
+          ))}
+          {MOTHERBOARD_CATALOG.map((board) => (
+            <button
+              className="library-item"
+              key={board.id}
+              onClick={() => setMotherboard(board.id)}
+            >
+              <span className="library-icon">
+                <Layers3 size={21} />
+              </span>
+              <span>
+                <strong>{board.shortName}</strong>
+                <small>Carte mère · AM5</small>
               </span>
               <Plus size={15} />
             </button>
@@ -1086,7 +1188,7 @@ export function App() {
                           onChange={(event) => changeOrigin(event.target.value === 'motherboard')}
                         >
                           <option value="gpu">Carte graphique dédiée</option>
-                          <option value="motherboard">Carte mère · non documentée</option>
+                          <option value="motherboard">Carte mère</option>
                         </select>
                         {source.kind === 'gpu' && (
                           <>
@@ -1104,6 +1206,33 @@ export function App() {
                                 </option>
                               )}
                               {GPU_CATALOG.map((item) => (
+                                <option key={item.id} value={item.id}>
+                                  {item.name}
+                                </option>
+                              ))}
+                            </select>
+                          </>
+                        )}
+                        {source.kind !== 'gpu' && (
+                          <>
+                            <label className="field-label" htmlFor="motherboard-model">
+                              Carte mère
+                            </label>
+                            <select
+                              id="motherboard-model"
+                              value={motherboardModelId ?? ''}
+                              onChange={(event) =>
+                                setMotherboard(event.target.value as MotherboardId)
+                              }
+                            >
+                              {!motherboardModelId && (
+                                <option value="" disabled>
+                                  {source.motherboard
+                                    ? `Profil importé · ${source.name}`
+                                    : 'Modèle non documenté'}
+                                </option>
+                              )}
+                              {MOTHERBOARD_CATALOG.map((item) => (
                                 <option key={item.id} value={item.id}>
                                   {item.name}
                                 </option>
@@ -1130,12 +1259,18 @@ export function App() {
                               un modèle dans Équipements pour charger sa référence NVIDIA.
                             </p>
                           ))}
+                        {source.motherboard && <MotherboardReference device={source} />}
                         <div className="section-kicker">SORTIES VIDÉO</div>
                         <div className="spec-list">
                           {source.ports.map((port) => (
                             <div key={port.id}>
                               <span>{port.label}</span>
-                              <strong>{format(port.maxPayloadGbps)}</strong>
+                              <strong>
+                                {port.maxPayloadGbps === null &&
+                                port.videoReference?.rawBandwidthGbps != null
+                                  ? `${port.videoReference.rawBandwidthGbps.toLocaleString('fr-FR')} Gbit/s bruts`
+                                  : format(port.maxPayloadGbps)}
+                              </strong>
                             </div>
                           ))}
                         </div>
@@ -1741,8 +1876,8 @@ export function App() {
                 </p>
                 <ol className="guide-list">
                   <li>
-                    <strong>Choisissez une source.</strong> GeForce RTX 50, RTX 4090 ou sortie de
-                    carte mère non documentée.
+                    <strong>Choisissez une source.</strong> GeForce RTX 50, RTX 4090 ou carte mère
+                    AM5. Les sorties de la carte mère dépendent du circuit graphique du processeur.
                   </li>
                   <li>
                     <strong>Renseignez votre écran.</strong> Cliquez sur sa carte pour adapter les
@@ -1781,6 +1916,20 @@ export function App() {
                     <Plus size={18} />
                   </button>
                 ))}
+                {MOTHERBOARD_CATALOG.map((item) => (
+                  <button
+                    className="catalog-choice"
+                    key={item.id}
+                    onClick={() => setMotherboard(item.id)}
+                  >
+                    <Layers3 size={27} />
+                    <span>
+                      <strong>{item.name}</strong>
+                      <small>{item.description}</small>
+                    </span>
+                    <Plus size={18} />
+                  </button>
+                ))}
                 <button className="catalog-choice" onClick={() => setDisplay('xeneon-flex')}>
                   <Monitor size={27} />
                   <span>
@@ -1806,8 +1955,8 @@ export function App() {
                 <div className="info-box">
                   <Info size={16} />
                   <p>
-                    L’ajout de plusieurs appareils arrivera dans une prochaine tranche. Le modèle
-                    conserve des appareils, ports et connexions séparés pour cette évolution.
+                    Une seule liaison vidéo est analysée à la fois. Votre carte graphique et votre
+                    carte mère restent enregistrées lorsque vous changez l’origine du signal.
                   </p>
                 </div>
               </>

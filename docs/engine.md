@@ -14,6 +14,8 @@ Les topologies à plusieurs écrans et leurs budgets partagés sont conservables
 
 `pixelClockMHz × 3 × bitsParComposante / 1000` est un budget conservateur RGB non compressé qui inclut les intervalles de suppression. Il ne représente pas une négociation complète du transport. La limite inférieure `largeur × hauteur × fréquence × 3 × bits / 10^9` permet de prouver un dépassement lorsque DSC est désactivé ou explicitement indisponible. Si seul le budget conservateur dépasse la liaison, le résultat reste indéterminé : un traitement exact des timings et de la suppression pourrait être nécessaire. Le débit HDMI n’est jamais déduit du seul numéro de version.
 
+Les caractéristiques descriptives distinguent le débit brut de liaison du budget `Port.maxPayloadGbps`. La RTX 4090 dispose d’une annonce NVIDIA FRL à 48 Gbit/s bruts ; le HDMI ASRock B850 Pro-A WiFi annonce FRL8G, soit 32 Gbit/s bruts. Les budgets utiles restent inconnus : appliquer seulement le rapport 16/18 du codage n’intègre pas FEC, paquets et négociation. Le débit FRL exact de la RTX 5080 de référence et du HDMI MSI X870E CARBON WIFI, ainsi que les voies allouées aux USB-C vidéo des deux cartes mères, ne sont pas établis. Voir [les sources et limites de ces quatre profils](hardware/video-outputs-4090-5080-am5.md). Le moteur n’étend pas son calcul DSC au HDMI à partir de ces nouvelles données.
+
 Le catalogue distingue les **timings de démonstration**, le timing standard CTA 1080p60 et le timing 3440 × 1440 à 240 Hz extrait du firmware officiel Corsair V110. Chaque mode porte sa provenance. Les autres timings natifs non intégrés restent inconnus. Les modes compatibles signifient « compatibles avec les caractéristiques et hypothèses fournies », pas une certification matérielle ni une lecture du matériel connecté.
 
 ## DSC sur DisplayPort
@@ -50,6 +52,10 @@ Caractéristiques NVIDIA et références vérifiées le 10 novembre 2026. Les pr
 Le champ facultatif `Device.gpu` conserve les caractéristiques descriptives et leur provenance dans les fichiers de schéma 1. Le moteur vidéo utilise les ports et le profil DSC accepté, pas la mémoire, les cœurs CUDA, les fréquences GPU ou la puissance électrique. Un maximum constructeur de quatre écrans ne lève pas la limite actuelle d’une seule chaîne simulée. Le connecteur PCIe et les options d’alimentation sont documentés dans la fiche ; leur raccordement et leur validation électrique ne sont pas modélisés par ces nouvelles données.
 
 ## Extension
+
+Les profils AM5 ajoutent `Device.kind: 'motherboard'` et les métadonnées facultatives `Device.motherboard` au schéma 1. Les anciens profils `other` restent lisibles. Les ports de ces profils représentent uniquement les sorties vidéo documentées ; USB, Ethernet, audio, alimentation, PCIe et stockage disposent d’un inventaire descriptif sourcé, sans simulation de leurs raccordements. Voir [les deux cartes mères et leurs sources](hardware/am5-motherboards.md).
+
+Le circuit graphique du processeur et son activation ne sont pas encore renseignés par ces profils. Le diagnostic `source-unverified` reste donc indéterminé sur une sortie de carte mère, même si une GeForce est présente dans le setup. Les plafonds annoncés HDMI/USB-C et les débits de données USB4 ne deviennent pas un budget vidéo négocié ; voies DP, timings, couleurs et DSC absents restent inconnus.
 
 Ajouter des appareils et connecteurs ne demande pas de changer la forme du graphe. Une nouvelle famille requiert néanmoins ses règles : conversions, alimentation, capacités par mode, systèmes et firmware, allocation de ressources internes et budgets simultanés. Les futurs changements s’accompagnent d’une évolution du schéma et de migrations. Ajouter une règle ne doit pas faire passer des caractéristiques manquantes à zéro ou à faux.
 

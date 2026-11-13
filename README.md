@@ -33,6 +33,7 @@ La version provient de `package.json` et les notes de `src/changelog.json`. Elle
 ## Utiliser la première version
 
 1. Sélectionner la carte NVIDIA de référence dans le catalogue ou le panneau de la source. Sa fiche présente ses sorties vidéo et ses spécifications sourcées : mémoire, fréquences, PCIe et recommandations d’alimentation.
+   Pour une sortie de carte mère, sélectionner l’ASRock B850 Pro-A WiFi ou la MSI MPG X870E CARBON WIFI. La fiche distingue leurs sorties HDMI/USB-C vidéo des autres prises et conserve la carte graphique dans le setup. Le circuit graphique du processeur et son activation restent à documenter pour établir un signal vidéo. Voir [les caractéristiques et sources AM5](docs/hardware/am5-motherboards.md).
 2. Choisir le XENEON FLEX dans la bibliothèque ou dans « Modèle d’écran ». Le profil fictif reste disponible et les brouillons existants sont conservés. Cliquer sur l’écran pour consulter les caractéristiques et renseigner les données manquantes de chaque entrée.
 3. Relier un port de sortie à une entrée, puis inspecter le câble et ses capacités déclarées.
 4. Choisir le mode souhaité et lire séparément le diagnostic du signal et celui de l’objectif vidéo.

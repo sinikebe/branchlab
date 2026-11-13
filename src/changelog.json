@@ -1,5 +1,22 @@
 [
   {
+    "version": "0.4.1",
+    "date": "2026-11-10",
+    "changes": [
+      "Consultez la documentation HDMI des RTX 4090 et 5080, avec les débits bruts confirmés et les limites encore inconnues.",
+      "Retrouvez les caractéristiques et sources de chaque sortie vidéo des ASRock B850 Pro-A WiFi et MSI MPG X870E CARBON WIFI."
+    ]
+  },
+  {
+    "version": "0.4.0",
+    "date": "2026-11-10",
+    "changes": [
+      "Ajoutez une ASRock B850 Pro-A WiFi ou une MSI MPG X870E CARBON WIFI et consultez leurs connecteurs et caractéristiques sourcés.",
+      "Choisissez une sortie HDMI ou USB-C vidéo de la carte mère en gardant visibles les conditions liées au processeur.",
+      "L’indication d’enregistrement confirme la sauvegarde de votre dernière modification du setup."
+    ]
+  },
+  {
     "version": "0.3.0",
     "date": "2026-11-10",
     "changes": [
